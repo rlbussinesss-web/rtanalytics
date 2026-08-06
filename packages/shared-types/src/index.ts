@@ -17,7 +17,8 @@ export type EventType =
   | "click"
   | "scroll"
   | "web-vitals"
-  | "error";
+  | "error"
+  | "replay-chunk";
 
 /** Fields common to every event envelope, regardless of type. */
 export interface BaseEvent {
@@ -111,6 +112,29 @@ export interface ErrorEvent extends BaseEvent {
   payload: ErrorPayload;
 }
 
+/**
+ * A batch of rrweb recording events — the raw material for reconstructing the
+ * visitor's screen. Emitted only while a viewer is actively watching this
+ * session (see the control channel in apps/ingest), so an unwatched visitor
+ * pays no CPU or bandwidth cost for replay.
+ */
+export interface ReplayChunkPayload {
+  /** rrweb eventWithTime objects. Opaque here — only the replayer interprets them. */
+  frames: unknown[];
+  /** Monotonic counter per session, so the viewer can detect gaps. */
+  seq: number;
+}
+
+export interface ReplayChunkEvent extends BaseEvent {
+  eventType: "replay-chunk";
+  payload: ReplayChunkPayload;
+}
+
+/** Commands the server pushes down to a connected tracker. */
+export type TrackerCommand =
+  | { type: "start-recording" }
+  | { type: "stop-recording" };
+
 /** Union of every concrete event the tracker can emit. */
 export type TrackerEvent =
   | PageviewEvent
@@ -118,7 +142,8 @@ export type TrackerEvent =
   | ClickEvent
   | ScrollEvent
   | WebVitalsEvent
-  | ErrorEvent;
+  | ErrorEvent
+  | ReplayChunkEvent;
 
 /** Enriched fields that ingest attaches server-side before persistence/broadcast. */
 export interface EnrichedFields {

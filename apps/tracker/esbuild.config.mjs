@@ -19,10 +19,28 @@ await build({
   platform: "browser",
 });
 
+// The rrweb recorder is bundled separately and loaded only when a viewer asks
+// to watch a session, so its size never counts against the tracker budget that
+// every visitor pays.
+const recorderOutfile = path.join(__dirname, "dist", "recorder.js");
+await build({
+  entryPoints: [path.join(__dirname, "src", "recorder-entry.ts")],
+  outfile: recorderOutfile,
+  bundle: true,
+  minify: true,
+  sourcemap: true,
+  target: ["es2020"],
+  format: "iife",
+  platform: "browser",
+});
+
 const bundle = readFileSync(outfile);
 const gzipped = gzipSync(bundle);
 const gzipKb = (gzipped.length / 1024).toFixed(2);
 const rawKb = (bundle.length / 1024).toFixed(2);
+
+const recorderGzipKb = (gzipSync(readFileSync(recorderOutfile)).length / 1024).toFixed(2);
+console.log(`recorder.js: ${recorderGzipKb} KB gzip (lazy-loaded, off the critical path)`);
 
 console.log(`tracker.js: ${rawKb} KB raw, ${gzipKb} KB gzip (budget: ${(GZIP_BUDGET_BYTES / 1024).toFixed(0)} KB)`);
 

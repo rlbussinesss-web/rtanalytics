@@ -39,3 +39,17 @@ export async function publishLiveEvent(siteId: string, event: unknown): Promise<
   const redis = getRedis();
   await redis.publish(`live:${siteId}`, JSON.stringify(event));
 }
+
+/**
+ * Replay frames go to a per-session channel so a viewer watching one visitor
+ * never receives another visitor's frames, and so nothing is fanned out when
+ * nobody is subscribed.
+ */
+export async function publishReplayChunk(
+  siteId: string,
+  sessionId: string,
+  event: unknown
+): Promise<void> {
+  const redis = getRedis();
+  await redis.publish(`replay:${siteId}:${sessionId}`, JSON.stringify(event));
+}

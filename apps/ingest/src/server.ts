@@ -3,7 +3,8 @@ import websocketPlugin from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { parseTrackerEvent } from "@rtanalytics/protocol";
 import { publishEvent } from "./stream.js";
-import { touchPresence, publishLiveEvent } from "./redis.js";
+import { touchPresence, publishLiveEvent, publishReplayChunk } from "./redis.js";
+import { registerSession, unregisterSession, connectionCount, subscribeToCommands } from "./sessions.js";
 
 const PORT = Number(process.env.INGEST_PORT ?? process.env.PORT ?? 8081);
 
@@ -29,12 +30,32 @@ const app = Fastify({ logger: true });
 
 await app.register(websocketPlugin);
 
-app.get("/healthz", async () => ({ status: "ok" }));
+subscribeToCommands(process.env.REDIS_URL ?? "redis://localhost:6379", (msg) =>
+  app.log.info(msg)
+);
+
+app.get("/healthz", async () => ({
+  status: "ok",
+  connections: connectionCount(),
+}));
 
 app.register(async (fastify) => {
   fastify.get("/", { websocket: true }, (socket: WebSocket) => {
+    // The session id only becomes known once the first event arrives, so the
+    // registry is populated lazily and cleaned up on close.
+    let sessionId: string | null = null;
+
     socket.on("message", (raw: Buffer) => {
-      void handleMessage(socket, raw);
+      void handleMessage(socket, raw, (id) => {
+        if (sessionId !== id) {
+          sessionId = id;
+          registerSession(id, socket);
+        }
+      });
+    });
+
+    socket.on("close", () => {
+      if (sessionId) unregisterSession(sessionId);
     });
 
     socket.on("error", (err) => {
@@ -43,7 +64,11 @@ app.register(async (fastify) => {
   });
 });
 
-async function handleMessage(socket: WebSocket, raw: Buffer): Promise<void> {
+async function handleMessage(
+  socket: WebSocket,
+  raw: Buffer,
+  onSessionKnown: (sessionId: string) => void
+): Promise<void> {
   let parsedJson: unknown;
   try {
     parsedJson = JSON.parse(raw.toString("utf-8"));
@@ -62,6 +87,18 @@ async function handleMessage(socket: WebSocket, raw: Buffer): Promise<void> {
 
   if (!isSiteAllowed(event.siteId)) {
     sendError(socket, "unknown_site");
+    return;
+  }
+
+  onSessionKnown(event.sessionId);
+
+  // Replay frames take a different path: they are high-volume, only useful to
+  // whoever is watching right now, and would drown both the event log and the
+  // dashboard's activity feed. They go straight to that session's channel.
+  if (event.eventType === "replay-chunk") {
+    await publishReplayChunk(event.siteId, event.sessionId, event).catch((err) =>
+      app.log.warn({ err }, "replay chunk publish failed")
+    );
     return;
   }
 

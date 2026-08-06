@@ -21,7 +21,14 @@ export class Transport {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closedByUser = false;
 
+  private onCommand: ((type: string) => void) | null = null;
+
   constructor(private readonly url: string) {}
+
+  /** Registers a handler for commands pushed down by the server. */
+  setCommandHandler(handler: (type: string) => void): void {
+    this.onCommand = handler;
+  }
 
   connect(): void {
     this.closedByUser = false;
@@ -39,6 +46,18 @@ export class Transport {
     this.ws.addEventListener("open", () => {
       this.attempt = 0;
       this.flush();
+    });
+
+    this.ws.addEventListener("message", (ev: MessageEvent) => {
+      try {
+        const msg = JSON.parse(String(ev.data)) as { type?: string };
+        // "ack" and "error" are per-event replies; anything else is a command.
+        if (msg.type && msg.type !== "ack" && msg.type !== "error") {
+          this.onCommand?.(msg.type);
+        }
+      } catch {
+        // ignore unparseable frames
+      }
     });
 
     this.ws.addEventListener("close", () => {

@@ -3,7 +3,12 @@ import websocketPlugin from "@fastify/websocket";
 import cors from "@fastify/cors";
 import type { WebSocket } from "ws";
 import type { Redis } from "ioredis";
-import { createRedisClient, getOnlineCount } from "./redis.js";
+import {
+  createRedisClient,
+  getOnlineCount,
+  getOnlineSessions,
+  sendRecordingCommand,
+} from "./redis.js";
 import { extractToken, isValidToken } from "./auth.js";
 
 const PORT = Number(process.env.DASHBOARD_API_PORT ?? process.env.PORT ?? 8082);
@@ -39,6 +44,11 @@ app.get("/api/sites/:siteId/online-count", async (req) => {
   return { siteId, onlineCount: count };
 });
 
+app.get("/api/sites/:siteId/sessions", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  return { siteId, sessions: await getOnlineSessions(siteId) };
+});
+
 app.register(async (fastify) => {
   fastify.get("/live/:siteId", { websocket: true }, (socket: WebSocket, req) => {
     const { siteId } = req.params as { siteId: string };
@@ -56,6 +66,52 @@ app.register(async (fastify) => {
     });
 
     const cleanup = () => {
+      subscriber.unsubscribe(channel).catch(() => undefined);
+      subscriber.quit().catch(() => undefined);
+    };
+
+    socket.on("close", cleanup);
+    socket.on("error", cleanup);
+  });
+
+  /**
+   * Live screen viewing for one session.
+   *
+   * Opening this socket tells the visitor's browser to start recording;
+   * closing it tells it to stop. Recording therefore costs the visitor
+   * nothing unless someone is actually watching — the main reason this is
+   * cheaper on the visitor's device than always-on session recorders.
+   */
+  fastify.get("/watch/:siteId/:sessionId", { websocket: true }, (socket: WebSocket, req) => {
+    const { siteId, sessionId } = req.params as { siteId: string; sessionId: string };
+    const subscriber: Redis = createRedisClient();
+    const channel = `replay:${siteId}:${sessionId}`;
+    let stopped = false;
+
+    subscriber.subscribe(channel).catch((err) => {
+      app.log.error({ err, channel }, "failed to subscribe to replay channel");
+    });
+
+    subscriber.on("message", (_chan: string, message: string) => {
+      if (socket.readyState === socket.OPEN) socket.send(message);
+    });
+
+    void sendRecordingCommand(sessionId, "start-recording").catch((err) =>
+      app.log.error({ err, sessionId }, "failed to send start-recording")
+    );
+
+    // Re-issue periodically: a visitor who navigates to a new page arrives on
+    // a fresh socket with no recorder running, and would otherwise go dark
+    // for as long as the viewer keeps watching.
+    const rearm = setInterval(() => {
+      void sendRecordingCommand(sessionId, "start-recording").catch(() => undefined);
+    }, 10_000);
+
+    const cleanup = () => {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(rearm);
+      void sendRecordingCommand(sessionId, "stop-recording").catch(() => undefined);
       subscriber.unsubscribe(channel).catch(() => undefined);
       subscriber.quit().catch(() => undefined);
     };

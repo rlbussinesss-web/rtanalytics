@@ -76,6 +76,24 @@ export const errorSchema = z.object({
   }),
 });
 
+/**
+ * Batch of rrweb frames for live screen reconstruction.
+ *
+ * `frames` stays `unknown` on purpose: rrweb's event shape is large, versioned
+ * by rrweb itself, and only ever interpreted by the replayer. Validating its
+ * internals here would couple the protocol to an rrweb version for no safety
+ * gain. The cap on array length is what actually matters — it bounds how much
+ * a single message can cost us.
+ */
+export const replayChunkSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("replay-chunk"),
+  payload: z.object({
+    frames: z.array(z.unknown()).max(500),
+    seq: z.number().int().nonnegative(),
+  }),
+});
+
 /** Discriminated union covering every event type the ingest server accepts. */
 export const trackerEventSchema = z.discriminatedUnion("eventType", [
   pageviewSchema,
@@ -84,6 +102,7 @@ export const trackerEventSchema = z.discriminatedUnion("eventType", [
   scrollSchema,
   webVitalsSchema,
   errorSchema,
+  replayChunkSchema,
 ]);
 
 export type PageviewEvent = z.infer<typeof pageviewSchema>;
@@ -92,6 +111,7 @@ export type ClickEvent = z.infer<typeof clickSchema>;
 export type ScrollEvent = z.infer<typeof scrollSchema>;
 export type WebVitalsEvent = z.infer<typeof webVitalsSchema>;
 export type ErrorEvent = z.infer<typeof errorSchema>;
+export type ReplayChunkEvent = z.infer<typeof replayChunkSchema>;
 export type TrackerEvent = z.infer<typeof trackerEventSchema>;
 
 /**

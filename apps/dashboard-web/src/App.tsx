@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useLiveEvents } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
+import { useSessions } from "./useSessions";
+import { LiveScreen } from "./LiveScreen";
 
 const DEFAULT_SITE_ID = import.meta.env.VITE_SITE_ID ?? "demo-site";
 
@@ -62,6 +64,13 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [siteId] = useState(DEFAULT_SITE_ID);
   const { events, connected } = useLiveEvents(siteId);
   const onlineCount = useOnlineCount(siteId, events);
+  const sessions = useSessions(siteId, events);
+  const [watching, setWatching] = useState<string | null>(null);
+
+  const pathBySession = new Map<string, string>();
+  for (const event of events) {
+    if (!pathBySession.has(event.sessionId)) pathBySession.set(event.sessionId, event.path);
+  }
 
   return (
     <div style={styles.page}>
@@ -79,6 +88,32 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         <div style={styles.counterValue}>{onlineCount}</div>
         <div style={styles.counterLabel}>visitantes online agora</div>
       </section>
+
+      <section style={{ marginBottom: 24 }}>
+        <h2 style={styles.sectionTitle}>Visitantes agora</h2>
+        <ul style={styles.eventList}>
+          {sessions.length === 0 && (
+            <li style={styles.emptyState}>Nenhum visitante online.</li>
+          )}
+          {sessions.map((sessionId) => (
+            <li key={sessionId} style={styles.sessionRow}>
+              <span style={styles.eventSession}>{sessionId.slice(0, 8)}</span>
+              <span style={styles.eventPath}>{pathBySession.get(sessionId) ?? "—"}</span>
+              <button onClick={() => setWatching(sessionId)} style={styles.watchButton}>
+                assistir ao vivo
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      {watching && (
+        <LiveScreen
+          siteId={siteId}
+          sessionId={watching}
+          onClose={() => setWatching(null)}
+        />
+      )}
 
       <section>
         <h2 style={styles.sectionTitle}>Eventos ao vivo</h2>
@@ -171,4 +206,22 @@ const styles: Record<string, React.CSSProperties> = {
   eventSession: { color: "#888", fontFamily: "monospace" },
   eventTime: { color: "#888", textAlign: "right" },
   emptyState: { color: "#888", padding: "12px 4px" },
+  sessionRow: {
+    display: "grid",
+    gridTemplateColumns: "90px 1fr auto",
+    gap: 8,
+    alignItems: "center",
+    padding: "8px 4px",
+    borderBottom: "1px solid #f0f0f0",
+    fontSize: 13,
+  },
+  watchButton: {
+    border: "none",
+    background: "#1a1a1a",
+    color: "white",
+    borderRadius: 8,
+    padding: "6px 12px",
+    fontSize: 12,
+    cursor: "pointer",
+  },
 };

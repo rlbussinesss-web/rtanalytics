@@ -23,6 +23,7 @@ const VERCEL_PROJECT = process.env.VERCEL_PROJECT ?? "rtanalytics";
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "dist");
 const trackerBundle = join(here, "..", "tracker", "dist", "tracker.js");
+const recorderBundle = join(here, "..", "tracker", "dist", "recorder.js");
 
 const required = [
   "VITE_DASHBOARD_API_URL",
@@ -47,13 +48,16 @@ const run = (cmd, cwd = here) => {
 run("pnpm --filter @rtanalytics/tracker build", join(here, "..", ".."));
 run("pnpm --filter @rtanalytics/dashboard-web build", join(here, "..", ".."));
 
-if (!existsSync(trackerBundle)) {
-  console.error(`Tracker bundle not found at ${trackerBundle}`);
-  process.exit(1);
+for (const bundle of [trackerBundle, recorderBundle]) {
+  if (!existsSync(bundle)) {
+    console.error(`Bundle not found at ${bundle}`);
+    process.exit(1);
+  }
 }
 copyFileSync(trackerBundle, join(dist, "tracker.js"));
+copyFileSync(recorderBundle, join(dist, "recorder.js"));
 copyFileSync(join(here, "vercel.json"), join(dist, "vercel.json"));
-console.log("Copied tracker.js and vercel.json into dist/");
+console.log("Copied tracker.js, recorder.js and vercel.json into dist/");
 
 // `vite build` empties dist/, which deletes the .vercel link file along with
 // it. Without relinking, the CLI treats dist/ as a brand-new project and

@@ -11,5 +11,8 @@
   "devDependencies": {
     "esbuild": "^0.23.1",
     "typescript": "^5.6.3"
+  },
+  "dependencies": {
+    "rrweb": "^2.1.1"
   }
 }

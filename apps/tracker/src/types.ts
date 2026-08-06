@@ -14,7 +14,8 @@ export type EventType =
   | "click"
   | "scroll"
   | "web-vitals"
-  | "error";
+  | "error"
+  | "replay-chunk";
 
 export interface BaseEvent {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -50,8 +51,14 @@ export type ClickEvent = TrackerEventEnvelope<
 
 export type ScrollEvent = TrackerEventEnvelope<"scroll", { depthPct: number }>;
 
+export type ReplayChunkEvent = TrackerEventEnvelope<
+  "replay-chunk",
+  { frames: unknown[]; seq: number }
+>;
+
 export type AnyTrackerEvent =
   | PageviewEvent
   | HeartbeatEvent
   | ClickEvent
-  | ScrollEvent;
+  | ScrollEvent
+  | ReplayChunkEvent;

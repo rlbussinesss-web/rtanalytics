@@ -2,12 +2,15 @@ import { SCHEMA_VERSION } from "./types";
 import type { AnyTrackerEvent } from "./types";
 import { getVisitorId, getSessionId, uuid } from "./ids";
 import { Transport } from "./transport";
+import { Recorder } from "./recorder";
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 interface TrackerConfig {
   siteId: string;
   wsUrl: string;
+  /** Where the on-demand rrweb recorder bundle is hosted. */
+  recorderUrl: string;
 }
 
 function readConfigFromScriptTag(): TrackerConfig {
@@ -29,7 +32,13 @@ function readConfigFromScriptTag(): TrackerConfig {
     );
   }
 
-  return { siteId, wsUrl: configured ?? "ws://localhost:8081" };
+  // Defaults to a sibling of the tracker script, so self-hosting both files
+  // together needs no extra configuration.
+  const recorderUrl =
+    current?.dataset.recorderUrl ??
+    (current?.src ? current.src.replace(/[^/]+$/, "recorder.js") : "/recorder.js");
+
+  return { siteId, wsUrl: configured ?? "ws://localhost:8081", recorderUrl };
 }
 
 class RTATracker {
@@ -39,11 +48,20 @@ class RTATracker {
   private readonly sessionId: string;
   private readonly startedAt = Date.now();
 
+  private readonly recorder: Recorder;
+
   constructor(config: TrackerConfig) {
     this.config = config;
     this.visitorId = getVisitorId();
     this.sessionId = getSessionId();
     this.transport = new Transport(config.wsUrl);
+    this.recorder = new Recorder(config.recorderUrl, (frames, seq) => {
+      this.transport.send({
+        ...this.baseEnvelope(),
+        eventType: "replay-chunk",
+        payload: { frames, seq },
+      });
+    });
   }
 
   private baseEnvelope(): Pick<
@@ -85,6 +103,17 @@ class RTATracker {
   }
 
   start(): void {
+    this.transport.setCommandHandler((type) => {
+      if (type === "start-recording") {
+        // Re-sent every 10s by the viewer; start() is a no-op when already on.
+        void this.recorder.start().catch((err) => {
+          console.warn("[rtanalytics] could not start recorder:", err);
+        });
+      } else if (type === "stop-recording") {
+        this.recorder.stop();
+      }
+    });
+
     this.transport.connect();
     this.trackPageview();
     setInterval(() => this.trackHeartbeat(), HEARTBEAT_INTERVAL_MS);
