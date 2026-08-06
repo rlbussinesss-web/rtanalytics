@@ -18,10 +18,10 @@ export async function setSessionMeta(
 ): Promise<SessionMeta> {
   const rows = await query<{ favorite: boolean; tags: string[] }>(
     `INSERT INTO session_meta (site_id, session_id, favorite, tags, updated_at)
-       VALUES ($1, $2, coalesce($3, false), coalesce($4, '{}'), now())
+       VALUES ($1, $2, coalesce($3::boolean, false), coalesce($4::text[], '{}'::text[]), now())
      ON CONFLICT (site_id, session_id) DO UPDATE SET
-       favorite = coalesce($3, session_meta.favorite),
-       tags     = coalesce($4, session_meta.tags),
+       favorite = coalesce($3::boolean, session_meta.favorite),
+       tags     = coalesce($4::text[], session_meta.tags),
        updated_at = now()
      RETURNING favorite, tags`,
     [siteId, sessionId, patch.favorite ?? null, patch.tags ?? null]
