@@ -41,6 +41,7 @@ export function Sidebar({
   theme,
   onToggleTheme,
   onLogout,
+  open = false,
 }: {
   siteId: string;
   active: ViewKey;
@@ -49,10 +50,11 @@ export function Sidebar({
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onLogout: () => void;
+  open?: boolean;
 }) {
   const av = avatarFor(siteId);
   return (
-    <aside className="sidebar">
+    <aside className={`sidebar${open ? " is-open" : ""}`}>
       <div className="brand-row">
         <span className="brand-mark">
           <Activity size={16} />

@@ -540,6 +540,74 @@ body {
 .stage iframe { background: #fff; border: none; box-shadow: var(--shadow); border-radius: 6px; }
 .spacer { margin-left: auto; }
 
+/* mobile ----------------------------------------------------------------- */
+/* Hidden on desktop; the drawer + hamburger only exist on small screens. */
+.menu-btn { display: none; }
+.nav-backdrop { display: none; }
+
+@media (max-width: 820px) {
+  .shell { grid-template-columns: 1fr; }
+
+  /* Sidebar becomes an off-canvas drawer toggled by the hamburger. */
+  .sidebar {
+    position: fixed; top: 0; left: 0; bottom: 0; width: 264px; z-index: 60;
+    transform: translateX(-100%); transition: transform 0.22s cubic-bezier(0.22,1,0.36,1);
+  }
+  .sidebar.is-open { transform: none; box-shadow: var(--shadow-lg); }
+  .nav-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 55;
+    background: rgba(6, 7, 9, 0.55); backdrop-filter: blur(2px);
+    animation: fadein 0.15s ease-out;
+  }
+
+  .menu-btn {
+    display: grid; place-items: center; width: 38px; height: 38px; flex-shrink: 0;
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface-2); color: var(--text); cursor: pointer;
+  }
+
+  .topbar { height: 56px; padding: 0 12px; gap: 8px; }
+  .search { display: none; }
+  .page-title { font-size: 14px; }
+  .page-title .crumb { display: none; }
+
+  .content { padding: 16px 13px 48px; }
+  .content-inner { max-width: none; }
+  .view-title { font-size: 19px; }
+
+  .grid { gap: 10px; }
+  .cols-2, .funnel-layout, .heatmap-layout { grid-template-columns: 1fr; }
+  .visitor-grid, .replay-grid { grid-template-columns: 1fr; }
+  .tops { grid-template-columns: 1fr; }
+
+  /* Event feed: drop the session-id column so the row fits a phone width. */
+  .event-row { grid-template-columns: 78px 1fr 60px; }
+  .event-row .mono { display: none; }
+
+  /* Donut stacks above its legend. */
+  .donut-wrap { flex-direction: column; align-items: stretch; }
+  .donut-svg { width: 130px; height: 130px; margin: 0 auto; }
+
+  /* Tab bars scroll horizontally instead of wrapping/overflowing. */
+  .tabs, .segment { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .segment { flex-wrap: nowrap; }
+
+  /* Full-screen modals on phones. */
+  .backdrop { padding: 0; }
+  .viewer { width: 100%; height: 100%; max-height: 100dvh; border-radius: 0; border: none; }
+  .viewer-head { flex-wrap: wrap; gap: 8px; padding: 10px 12px; }
+
+  /* Funnel step editor stacks its controls. */
+  .funnel-step-edit { grid-template-columns: 1fr auto; }
+  .funnel-kind { grid-column: 1 / -1; }
+
+  /* Heatmap toolbar wraps; picker takes full width. */
+  .heatmap-toolbar select { max-width: none !important; flex: 1 1 100%; }
+
+  /* Alerts popover fits the viewport instead of overflowing off-screen. */
+  .popover { position: fixed; top: 60px; right: 8px; left: 8px; width: auto; }
+}
+
 /* live presence ---------------------------------------------------------- */
 .presence-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 550; }
 .presence-badge.active { background: var(--success-soft); color: var(--success); }

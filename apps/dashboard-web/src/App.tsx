@@ -112,6 +112,7 @@ function Dashboard({
   const [watching, setWatching] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>("overview");
   const [range, setRange] = useState<RangeKey>("24h");
+  const [navOpen, setNavOpen] = useState(false);
   const alerts = useAlerts(events, onlineCount);
 
   const infoBySession = useMemo(() => {
@@ -134,17 +135,23 @@ function Dashboard({
       <Sidebar
         siteId={siteId}
         active={view}
-        onNavigate={setView}
+        onNavigate={(v) => {
+          setView(v);
+          setNavOpen(false);
+        }}
         onlineCount={onlineCount}
         theme={theme}
         onToggleTheme={onToggleTheme}
         onLogout={onLogout}
+        open={navOpen}
       />
+      {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
       <div className="main">
         <Topbar
           title={VIEW_TITLES[view]}
           siteId={siteId}
           connected={connected}
+          onMenu={() => setNavOpen(true)}
           actions={
             <AlertsBell
               fired={alerts.fired}
