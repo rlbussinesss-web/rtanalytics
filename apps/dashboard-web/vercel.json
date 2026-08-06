@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    { "source": "/((?!assets/|tracker.js).*)", "destination": "/index.html" }
+    { "source": "/((?!assets/|tracker.js|demo.html).*)", "destination": "/index.html" }
   ],
   "headers": [
     {

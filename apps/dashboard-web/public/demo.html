@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RTAnalytics — página de teste</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; line-height: 1.6; }
+      code { background: #f4f4f4; padding: 2px 6px; border-radius: 4px; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #111; color: #eee; }
+        code { background: #222; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Página de teste</h1>
+    <p>
+      Esta página carrega o tracker exatamente como um site monitorado faria.
+      Deixe-a aberta e abra o painel em outra aba: você deve aparecer como
+      visitante online, com um <code>pageview</code> imediato e um
+      <code>heartbeat</code> a cada 15 segundos.
+    </p>
+
+    <script
+      async
+      src="/tracker.js"
+      data-site-id="meu-site"
+      data-ingest-url="wss://ingest-production-e15e.up.railway.app"
+    ></script>
+  </body>
+</html>

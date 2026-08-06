@@ -16,9 +16,20 @@ function readConfigFromScriptTag(): TrackerConfig {
     document.querySelector<HTMLScriptElement>("script[data-site-id]");
 
   const siteId = current?.dataset.siteId ?? "unknown";
-  const wsUrl = current?.dataset.wsUrl ?? "ws://localhost:8081";
 
-  return { siteId, wsUrl };
+  // Both spellings are accepted: `data-ingest-url` reads better on a customer's
+  // page, `data-ws-url` is the original name. Silently falling back to the
+  // localhost dev default on a live site is the failure mode this guards
+  // against — it looks like the tracker works while nothing is ever delivered.
+  const configured = current?.dataset.ingestUrl ?? current?.dataset.wsUrl;
+  if (!configured) {
+    console.warn(
+      "[rtanalytics] no data-ingest-url on the script tag — falling back to " +
+        "ws://localhost:8081, which only works in local development."
+    );
+  }
+
+  return { siteId, wsUrl: configured ?? "ws://localhost:8081" };
 }
 
 class RTATracker {

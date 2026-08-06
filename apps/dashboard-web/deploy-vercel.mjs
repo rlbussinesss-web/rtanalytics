@@ -18,6 +18,8 @@ import { copyFileSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const VERCEL_PROJECT = process.env.VERCEL_PROJECT ?? "rtanalytics";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const dist = join(here, "dist");
 const trackerBundle = join(here, "..", "tracker", "dist", "tracker.js");
@@ -53,4 +55,9 @@ copyFileSync(trackerBundle, join(dist, "tracker.js"));
 copyFileSync(join(here, "vercel.json"), join(dist, "vercel.json"));
 console.log("Copied tracker.js and vercel.json into dist/");
 
+// `vite build` empties dist/, which deletes the .vercel link file along with
+// it. Without relinking, the CLI treats dist/ as a brand-new project and
+// publishes to a project literally named "dist" instead of updating the real
+// site — silently, with a success message.
+run(`vercel link --yes --project ${VERCEL_PROJECT}`, dist);
 run("vercel deploy --prod --yes", dist);
