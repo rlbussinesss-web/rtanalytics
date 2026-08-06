@@ -10,6 +10,7 @@ import {
   sendRecordingCommand,
 } from "./redis.js";
 import { extractToken, isValidToken } from "./auth.js";
+import { computeMetrics, type RangeKey } from "./metrics.js";
 
 const PORT = Number(process.env.DASHBOARD_API_PORT ?? process.env.PORT ?? 8082);
 
@@ -47,6 +48,14 @@ app.get("/api/sites/:siteId/online-count", async (req) => {
 app.get("/api/sites/:siteId/sessions", async (req) => {
   const { siteId } = req.params as { siteId: string };
   return { siteId, sessions: await getOnlineSessions(siteId) };
+});
+
+app.get("/api/sites/:siteId/metrics", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string };
+  const range: RangeKey =
+    q.range === "7d" || q.range === "30d" ? q.range : "24h";
+  return computeMetrics(siteId, range);
 });
 
 app.register(async (fastify) => {
