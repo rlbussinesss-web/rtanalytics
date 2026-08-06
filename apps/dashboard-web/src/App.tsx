@@ -1,19 +1,34 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Clock, MousePointerClick, Users, Zap } from "lucide-react";
 import { useLiveEvents, type LiveEvent } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
+import { useTheme } from "./useTheme";
 import { LiveScreen } from "./LiveScreen";
 import { MetricsPanel } from "./MetricsPanel";
 import { FunnelPanel } from "./FunnelPanel";
 import { ReplaysPanel } from "./ReplaysPanel";
 import type { RangeKey } from "./useMetrics";
+import { Sidebar, type ViewKey } from "./components/Sidebar";
+import { Topbar } from "./components/Topbar";
+import { StatCard } from "./components/StatCard";
+import { VisitorCard } from "./components/VisitorCard";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
 import "./styles.css";
 
 const DEFAULT_SITE_ID = import.meta.env.VITE_SITE_ID ?? "demo-site";
 
+const VIEW_TITLES: Record<ViewKey, string> = {
+  overview: "Visão geral",
+  live: "Ao vivo",
+  metrics: "Métricas",
+  funnel: "Funil",
+  replays: "Gravações",
+};
+
 export function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
+  useTheme(); // apply persisted theme even on the login screen
 
   if (!authed) return <LoginScreen onSuccess={() => setAuthed(true)} />;
   return (
@@ -52,8 +67,11 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   return (
     <div className="login-page">
       <form onSubmit={submit} className="card login-card">
-        <h1 className="login-title">RTAnalytics</h1>
-        <p className="login-sub">Monitoramento em tempo real</p>
+        <div className="login-brand">
+          <span className="brand-mark"><Activity size={16} /></span>
+          <h1 className="login-title">RTAnalytics</h1>
+        </div>
+        <p className="login-sub">Monitoramento de visitantes em tempo real</p>
         <input
           className="input"
           type="password"
@@ -62,7 +80,7 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
           placeholder="Senha do painel"
           autoFocus
         />
-        <button type="submit" className="btn btn-primary" disabled={checking || !password}>
+        <button type="submit" className="btn btn-primary" disabled={checking || !password} style={{ justifyContent: "center" }}>
           {checking ? "Verificando…" : "Entrar"}
         </button>
         {error && <p className="error">{error}</p>}
@@ -77,10 +95,10 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const onlineCount = useOnlineCount(siteId, events);
   const sessions = useSessions(siteId, events);
   const [watching, setWatching] = useState<string | null>(null);
-  const [tab, setTab] = useState<"live" | "metrics" | "funnel" | "replays">("live");
+  const [view, setView] = useState<ViewKey>("overview");
   const [range, setRange] = useState<RangeKey>("24h");
+  const [theme, toggleTheme] = useTheme();
 
-  // Most recent path + enrichment per session, for the visitor list.
   const infoBySession = useMemo(() => {
     const map = new Map<string, LiveEvent>();
     for (const event of events) {
@@ -89,174 +107,191 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
     return map;
   }, [events]);
 
-  const eventsPerMinute = useMemo(() => {
-    const cutoff = Date.now() - 60_000;
-    return events.filter((e) => e.timestamp >= cutoff).length;
-  }, [events]);
+  // Track when each session was first seen this session, for "time online".
+  const firstSeenRef = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const now = Date.now();
+    for (const s of sessions) if (!firstSeenRef.current.has(s)) firstSeenRef.current.set(s, now);
+  }, [sessions]);
 
   return (
-    <div className="page">
-      <header className="topbar">
-        <h1 className="brand">
-          RTAnalytics <span>/ {siteId}</span>
-        </h1>
-        <span className={`pill${connected ? "" : " is-offline"}`}>
-          <i className="dot" />
-          {connected ? "ao vivo" : "reconectando"}
-        </span>
-        <button className="btn btn-ghost btn-sm spacer" onClick={onLogout}>
-          Sair
-        </button>
-      </header>
-
-      <nav className="tabs">
-        <button
-          className={`tab${tab === "live" ? " is-active" : ""}`}
-          onClick={() => setTab("live")}
-        >
-          Ao vivo
-        </button>
-        <button
-          className={`tab${tab === "metrics" ? " is-active" : ""}`}
-          onClick={() => setTab("metrics")}
-        >
-          Métricas
-        </button>
-        <button
-          className={`tab${tab === "funnel" ? " is-active" : ""}`}
-          onClick={() => setTab("funnel")}
-        >
-          Funil
-        </button>
-        <button
-          className={`tab${tab === "replays" ? " is-active" : ""}`}
-          onClick={() => setTab("replays")}
-        >
-          Gravações
-        </button>
-      </nav>
-
-      {tab === "live" && <LiveView />}
-      {tab === "metrics" && (
-        <MetricsPanel siteId={siteId} range={range} onRangeChange={setRange} />
-      )}
-      {tab === "funnel" && (
-        <>
-          <div className="range-tabs">
-            {(["24h", "7d", "30d"] as RangeKey[]).map((r) => (
-              <button
-                key={r}
-                className={`range-tab${r === range ? " is-active" : ""}`}
-                onClick={() => setRange(r)}
-              >
-                {r === "24h" ? "24 horas" : r === "7d" ? "7 dias" : "30 dias"}
-              </button>
-            ))}
+    <div className="shell">
+      <Sidebar
+        siteId={siteId}
+        active={view}
+        onNavigate={setView}
+        onlineCount={onlineCount}
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onLogout={onLogout}
+      />
+      <div className="main">
+        <Topbar title={VIEW_TITLES[view]} siteId={siteId} connected={connected} />
+        <div className="content">
+          <div className="content-inner">
+            {view === "overview" && (
+              <OverviewView
+                siteId={siteId}
+                onlineCount={onlineCount}
+                sessions={sessions}
+                events={events}
+                infoBySession={infoBySession}
+                firstSeen={firstSeenRef.current}
+                onWatch={setWatching}
+              />
+            )}
+            {view === "live" && (
+              <LiveView
+                onlineCount={onlineCount}
+                sessions={sessions}
+                events={events}
+                infoBySession={infoBySession}
+                firstSeen={firstSeenRef.current}
+                onWatch={setWatching}
+              />
+            )}
+            {view === "metrics" && (
+              <MetricsPanel siteId={siteId} range={range} onRangeChange={setRange} />
+            )}
+            {view === "funnel" && (
+              <>
+                <RangeSegment range={range} onChange={setRange} />
+                <FunnelPanel siteId={siteId} range={range} />
+              </>
+            )}
+            {view === "replays" && <ReplaysPanel siteId={siteId} />}
           </div>
-          <FunnelPanel siteId={siteId} range={range} />
-        </>
-      )}
-      {tab === "replays" && <ReplaysPanel siteId={siteId} />}
+        </div>
+      </div>
 
       {watching && (
         <LiveScreen siteId={siteId} sessionId={watching} onClose={() => setWatching(null)} />
       )}
     </div>
   );
-
-  function LiveView() {
-    return (
-      <>
-      <div className="grid">
-        <Stat value={onlineCount} label="visitantes online" />
-        <Stat value={sessions.length} label="sessões ativas" />
-        <Stat value={eventsPerMinute} label="eventos no último minuto" />
-      </div>
-
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Visitantes agora</h2>
-          <span className="section-count">{sessions.length}</span>
-        </div>
-        <ul className="list">
-          {sessions.length === 0 && <li className="empty">Nenhum visitante online.</li>}
-          {sessions.map((sessionId) => {
-            const info = infoBySession.get(sessionId);
-            return (
-              <li key={sessionId} className="row session-row">
-                <span className="mono">{sessionId.slice(0, 8)}</span>
-                <div className="session-meta">
-                  <span className="path">{info?.path ?? "—"}</span>
-                  <span className="meta-line">{describeVisitor(info)}</span>
-                </div>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => setWatching(sessionId)}
-                >
-                  Assistir ao vivo
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Eventos ao vivo</h2>
-          <span className="section-count">{events.length}</span>
-        </div>
-        <ul className="list is-scrollable">
-          {events.length === 0 && <li className="empty">Aguardando eventos…</li>}
-          {events.map((event) => (
-            <li key={event.eventId} className="row event-row">
-              <span className={`tag${event.eventType === "pageview" ? " is-pageview" : ""}`}>
-                {event.eventType}
-              </span>
-              <span className="path">{event.path}</span>
-              <span className="mono">{event.sessionId.slice(0, 8)}</span>
-              <span className="time">{new Date(event.timestamp).toLocaleTimeString()}</span>
-            </li>
-          ))}
-        </ul>
-      </section>
-      </>
-    );
-  }
 }
 
-/** Turns a two-letter country code into its flag emoji (BR → 🇧🇷). */
-function flag(country?: string): string {
-  if (!country || country.length !== 2) return "";
-  const A = 0x1f1e6;
-  return String.fromCodePoint(
-    A + country.charCodeAt(0) - 65,
-    A + country.charCodeAt(1) - 65
-  );
-}
-
-/** One-line "🇧🇷 São Paulo · Chrome · Windows · celular" summary. */
-function describeVisitor(info?: LiveEvent): string {
-  if (!info) return "—";
-  const deviceLabels: Record<string, string> = {
-    mobile: "celular",
-    tablet: "tablet",
-    desktop: "desktop",
-  };
-  const parts = [
-    [flag(info.country), info.city].filter(Boolean).join(" "),
-    info.browser,
-    info.os,
-    info.device ? deviceLabels[info.device] ?? info.device : undefined,
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "localizando…";
-}
-
-function Stat({ value, label }: { value: number; label: string }) {
+export function RangeSegment({ range, onChange }: { range: RangeKey; onChange: (r: RangeKey) => void }) {
+  const opts: [RangeKey, string][] = [["24h", "24 horas"], ["7d", "7 dias"], ["30d", "30 dias"]];
   return (
-    <div className="card stat">
-      <div className="stat-value">{value}</div>
-      <div className="stat-label">{label}</div>
+    <div className="segment" style={{ marginBottom: 18 }}>
+      {opts.map(([k, label]) => (
+        <button key={k} className={k === range ? "is-active" : ""} onClick={() => onChange(k)}>
+          {label}
+        </button>
+      ))}
     </div>
   );
+}
+
+interface LiveProps {
+  onlineCount: number;
+  sessions: string[];
+  events: LiveEvent[];
+  infoBySession: Map<string, LiveEvent>;
+  firstSeen: Map<string, number>;
+  onWatch: (id: string) => void;
+}
+
+function OverviewView({ siteId, ...p }: LiveProps & { siteId: string }) {
+  const eventsPerMin = useMemo(() => {
+    const cutoff = Date.now() - 60_000;
+    return p.events.filter((e) => e.timestamp >= cutoff).length;
+  }, [p.events]);
+
+  // Live sparkline of events over the last ~2 minutes, in 10s buckets.
+  const spark = useMemo(() => bucketize(p.events, 12, 10_000), [p.events]);
+
+  return (
+    <>
+      <div className="grid">
+        <StatCard icon={<Users size={16} />} name="Visitantes online" value={p.onlineCount} spark={spark} />
+        <StatCard icon={<Activity size={16} />} name="Sessões ativas" value={p.sessions.length} accent="#8b5cf6" />
+        <StatCard icon={<Zap size={16} />} name="Eventos / min" value={eventsPerMin} spark={spark} accent="#06b6d4" />
+        <StatCard icon={<Clock size={16} />} name="Site" value={siteId} accent="#10b981" />
+      </div>
+
+      <VisitorsSection {...p} />
+      <EventsSection events={p.events} />
+    </>
+  );
+}
+
+function LiveView(p: LiveProps) {
+  return (
+    <>
+      <div className="grid">
+        <StatCard icon={<Users size={16} />} name="Visitantes online" value={p.onlineCount} />
+        <StatCard icon={<Activity size={16} />} name="Sessões ativas" value={p.sessions.length} accent="#8b5cf6" />
+        <StatCard icon={<MousePointerClick size={16} />} name="Eventos ao vivo" value={p.events.length} accent="#06b6d4" />
+      </div>
+      <VisitorsSection {...p} />
+      <EventsSection events={p.events} />
+    </>
+  );
+}
+
+function VisitorsSection(p: LiveProps) {
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2 className="section-title">Visitantes agora</h2>
+        <span className="section-count">{p.sessions.length}</span>
+      </div>
+      {p.sessions.length === 0 ? (
+        <div className="card empty-rich">
+          <span className="ico"><Users size={20} /></span>
+          <b>Nenhum visitante online</b>
+          <p>Assim que alguém abrir uma página monitorada, aparece aqui em tempo real.</p>
+        </div>
+      ) : (
+        <div className="visitor-grid">
+          {p.sessions.map((sessionId) => (
+            <VisitorCard
+              key={sessionId}
+              sessionId={sessionId}
+              info={p.infoBySession.get(sessionId)}
+              firstSeen={p.firstSeen.get(sessionId) ?? Date.now()}
+              onWatch={() => p.onWatch(sessionId)}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function EventsSection({ events }: { events: LiveEvent[] }) {
+  return (
+    <section className="section">
+      <div className="section-head">
+        <h2 className="section-title">Eventos ao vivo</h2>
+        <span className="section-count">{events.length}</span>
+      </div>
+      <ul className="list is-scrollable">
+        {events.length === 0 && <li className="empty">Aguardando eventos…</li>}
+        {events.map((event) => (
+          <li key={event.eventId} className="row event-row">
+            <span className={`tag${event.eventType === "pageview" ? " is-pageview" : event.eventType === "conversion" ? " is-conversion" : ""}`}>
+              {event.eventType}
+            </span>
+            <span className="path">{event.path}</span>
+            <span className="mono">{event.sessionId.slice(0, 8)}</span>
+            <span className="time">{new Date(event.timestamp).toLocaleTimeString()}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Counts events into N trailing time buckets, for a live sparkline. */
+function bucketize(events: LiveEvent[], buckets: number, sizeMs: number): number[] {
+  const now = Date.now();
+  const out = new Array(buckets).fill(0);
+  for (const e of events) {
+    const idx = buckets - 1 - Math.floor((now - e.timestamp) / sizeMs);
+    if (idx >= 0 && idx < buckets) out[idx]++;
+  }
+  return out;
 }

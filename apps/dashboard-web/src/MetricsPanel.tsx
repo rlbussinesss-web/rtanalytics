@@ -1,10 +1,10 @@
+import { BarChart3, Clock, LogOut, MousePointerClick, Target, TrendingDown, Users } from "lucide-react";
 import { useMetrics, type Metrics, type RangeKey, type TopItem } from "./useMetrics";
+import { StatCard } from "./components/StatCard";
+import { AreaChart } from "./components/AreaChart";
+import { flag, fmtDuration, deviceLabel } from "./lib/ui";
 
-const RANGES: { key: RangeKey; label: string }[] = [
-  { key: "24h", label: "24 horas" },
-  { key: "7d", label: "7 dias" },
-  { key: "30d", label: "30 dias" },
-];
+const RANGES: [RangeKey, string][] = [["24h", "24 horas"], ["7d", "7 dias"], ["30d", "30 dias"]];
 
 export function MetricsPanel({
   siteId,
@@ -19,49 +19,45 @@ export function MetricsPanel({
 
   return (
     <div>
-      <div className="range-tabs">
-        {RANGES.map((r) => (
-          <button
-            key={r.key}
-            className={`range-tab${r.key === range ? " is-active" : ""}`}
-            onClick={() => onRangeChange(r.key)}
-          >
-            {r.label}
+      <div className="segment" style={{ marginBottom: 18 }}>
+        {RANGES.map(([k, label]) => (
+          <button key={k} className={k === range ? "is-active" : ""} onClick={() => onRangeChange(k)}>
+            {label}
           </button>
         ))}
       </div>
 
-      {!metrics && loading && <p className="empty">Carregando métricas…</p>}
+      {!metrics && loading && <SkeletonMetrics />}
       {metrics && <MetricsBody m={metrics} />}
     </div>
   );
 }
 
 function MetricsBody({ m }: { m: Metrics }) {
+  const spark = m.timeseries.map((t) => t.visitors);
   return (
     <>
       <div className="grid">
-        <Stat value={String(m.visitors)} label="visitantes únicos" />
-        <Stat value={String(m.sessions)} label="sessões" />
-        <Stat value={String(m.pageviews)} label="pageviews" />
-        <Stat value={fmtDuration(m.avgSessionSec)} label="tempo médio de sessão" />
-        <Stat value={`${Math.round(m.bounceRate * 100)}%`} label="taxa de rejeição" />
-        <Stat value={String(m.conversions)} label="conversões" />
-        <Stat value={`${(m.conversionRate * 100).toFixed(1)}%`} label="taxa de conversão" />
+        <StatCard icon={<Users size={16} />} name="Visitantes únicos" value={m.visitors} spark={spark} />
+        <StatCard icon={<BarChart3 size={16} />} name="Sessões" value={m.sessions} accent="#8b5cf6" />
+        <StatCard icon={<MousePointerClick size={16} />} name="Pageviews" value={m.pageviews} accent="#06b6d4" />
+        <StatCard icon={<Clock size={16} />} name="Tempo médio" value={fmtDuration(m.avgSessionSec)} accent="#10b981" />
+        <StatCard icon={<TrendingDown size={16} />} name="Taxa de rejeição" value={`${Math.round(m.bounceRate * 100)}%`} accent="#fbbf24" />
+        <StatCard icon={<Target size={16} />} name="Conversões" value={m.conversions} accent="#34d399" />
+        <StatCard icon={<LogOut size={16} />} name="Taxa de conversão" value={`${(m.conversionRate * 100).toFixed(1)}%`} accent="#34d399" />
       </div>
 
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Visitantes ao longo do tempo</h2>
+      <div className="card chart-card" style={{ marginBottom: 22 }}>
+        <div className="chart-head">
+          <h3>Visitantes ao longo do tempo</h3>
+          <span className="big">{m.visitors}</span>
         </div>
-        <div className="card chart-card">
-          <BarChart data={m.timeseries} />
-        </div>
-      </section>
+        <AreaChart data={m.timeseries.map((t) => ({ label: t.bucket, value: t.visitors }))} />
+      </div>
 
       <div className="tops">
         <TopList title="Top páginas" items={m.topPages} />
-        <TopList title="Top países" items={m.topCountries} format={flagLabel} />
+        <TopList title="Top países" items={m.topCountries} format={(c) => `${flag(c)} ${c}`} />
         <TopList title="Dispositivos" items={m.topDevices} format={deviceLabel} />
         <TopList title="Navegadores" items={m.topBrowsers} />
         <TopList title="Origens" items={m.topReferrers} />
@@ -70,49 +66,7 @@ function MetricsBody({ m }: { m: Metrics }) {
   );
 }
 
-function BarChart({ data }: { data: { bucket: string; visitors: number }[] }) {
-  if (data.length === 0) return <p className="empty">Sem dados no período.</p>;
-
-  const max = Math.max(...data.map((d) => d.visitors), 1);
-  const W = 100;
-  const H = 34;
-  const gap = 1.5;
-  const bw = (W - gap * (data.length - 1)) / data.length;
-
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="bars">
-      {data.map((d, i) => {
-        const h = (d.visitors / max) * (H - 2);
-        const x = i * (bw + gap);
-        return (
-          <rect
-            key={d.bucket}
-            x={x}
-            y={H - h}
-            width={bw}
-            height={h}
-            rx={0.4}
-            className="bar"
-          >
-            <title>
-              {new Date(d.bucket).toLocaleString()}: {d.visitors} visitantes
-            </title>
-          </rect>
-        );
-      })}
-    </svg>
-  );
-}
-
-function TopList({
-  title,
-  items,
-  format,
-}: {
-  title: string;
-  items: TopItem[];
-  format?: (label: string) => string;
-}) {
+function TopList({ title, items, format }: { title: string; items: TopItem[]; format?: (l: string) => string }) {
   const max = Math.max(...items.map((i) => i.count), 1);
   return (
     <div className="card top-card">
@@ -129,32 +83,21 @@ function TopList({
   );
 }
 
-function Stat({ value, label }: { value: string; label: string }) {
+function SkeletonMetrics() {
   return (
-    <div className="card stat">
-      <div className="stat-value">{value}</div>
-      <div className="stat-label">{label}</div>
-    </div>
+    <>
+      <div className="grid">
+        {Array.from({ length: 7 }).map((_, i) => (
+          <div key={i} className="card stat-card">
+            <div className="skel" style={{ width: 30, height: 30, borderRadius: 8, marginBottom: 12 }} />
+            <div className="skel" style={{ width: 80, height: 30, marginBottom: 10 }} />
+            <div className="skel" style={{ width: "60%", height: 12 }} />
+          </div>
+        ))}
+      </div>
+      <div className="card chart-card" style={{ marginBottom: 22 }}>
+        <div className="skel" style={{ width: "100%", height: 200 }} />
+      </div>
+    </>
   );
-}
-
-function fmtDuration(sec: number): string {
-  if (sec < 60) return `${sec}s`;
-  const m = Math.floor(sec / 60);
-  const s = sec % 60;
-  return `${m}m ${s}s`;
-}
-
-function flagLabel(code: string): string {
-  if (code.length !== 2) return code;
-  const A = 0x1f1e6;
-  const flag = String.fromCodePoint(
-    A + code.charCodeAt(0) - 65,
-    A + code.charCodeAt(1) - 65
-  );
-  return `${flag} ${code}`;
-}
-
-function deviceLabel(d: string): string {
-  return { mobile: "Celular", tablet: "Tablet", desktop: "Desktop" }[d] ?? d;
 }
