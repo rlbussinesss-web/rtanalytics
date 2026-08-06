@@ -12,11 +12,13 @@ export function VisitorCard({
   info,
   firstSeen,
   onWatch,
+  state = "active",
 }: {
   sessionId: string;
   info?: LiveEvent;
   firstSeen: number;
   onWatch: () => void;
+  state?: "active" | "hidden";
 }) {
   const av = avatarFor(sessionId);
   const loc = [flag(info?.country), info?.city].filter(Boolean).join(" ") || "Localizando…";
@@ -24,14 +26,18 @@ export function VisitorCard({
     info?.device === "mobile" ? Smartphone : info?.device === "tablet" ? Tablet : Monitor;
 
   return (
-    <div className="card visitor-card">
+    <div className={`card visitor-card${state === "hidden" ? " is-away" : ""}`}>
       <div className="vc-top">
         <span className="avatar" style={{ background: av.color }}>{av.initials}</span>
         <div style={{ minWidth: 0 }}>
           <div className="vc-id">Visitante {sessionId.slice(0, 6)}</div>
           <div className="vc-loc">{loc}</div>
         </div>
-        <span className="pill vc-live"><i className="dot" />ativo</span>
+        {state === "active" ? (
+          <span className="pill vc-live"><i className="dot" />ao vivo</span>
+        ) : (
+          <span className="pill is-away vc-live">segundo plano</span>
+        )}
       </div>
 
       <div className="vc-meta">

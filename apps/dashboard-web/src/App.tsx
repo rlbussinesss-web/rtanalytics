@@ -123,6 +123,18 @@ function Dashboard({
     return map;
   }, [events]);
 
+  // Latest visibility state per session, so the visitor list can separate
+  // people interacting now from those who backgrounded the tab.
+  const visibilityBySession = useMemo(() => {
+    const map = new Map<string, "visible" | "hidden" | "left">();
+    for (const event of events) {
+      if (event.eventType === "visibility" && !map.has(event.sessionId)) {
+        map.set(event.sessionId, (event.payload?.state as "visible" | "hidden" | "left") ?? "visible");
+      }
+    }
+    return map;
+  }, [events]);
+
   // Track when each session was first seen this session, for "time online".
   const firstSeenRef = useRef<Map<string, number>>(new Map());
   useEffect(() => {
@@ -171,6 +183,7 @@ function Dashboard({
                 sessions={sessions}
                 events={events}
                 infoBySession={infoBySession}
+                visibilityBySession={visibilityBySession}
                 firstSeen={firstSeenRef.current}
                 onWatch={setWatching}
               />
@@ -181,6 +194,7 @@ function Dashboard({
                 sessions={sessions}
                 events={events}
                 infoBySession={infoBySession}
+                visibilityBySession={visibilityBySession}
                 firstSeen={firstSeenRef.current}
                 onWatch={setWatching}
               />
@@ -232,6 +246,7 @@ interface LiveProps {
   sessions: string[];
   events: LiveEvent[];
   infoBySession: Map<string, LiveEvent>;
+  visibilityBySession: Map<string, "visible" | "hidden" | "left">;
   firstSeen: Map<string, number>;
   onWatch: (id: string) => void;
 }
@@ -275,32 +290,60 @@ function LiveView(p: LiveProps) {
 }
 
 function VisitorsSection(p: LiveProps) {
+  // A visitor is "ao vivo" while their tab is focused (visible or no signal
+  // yet), and "em segundo plano" once they background it. When they return,
+  // the visibility flips back to visible and they move up automatically.
+  const live: string[] = [];
+  const away: string[] = [];
+  for (const s of p.sessions) {
+    const vis = p.visibilityBySession.get(s);
+    if (vis === "hidden" || vis === "left") away.push(s);
+    else live.push(s);
+  }
+
+  const renderCards = (ids: string[], state: "active" | "hidden") => (
+    <div className="visitor-grid">
+      {ids.map((sessionId) => (
+        <VisitorCard
+          key={sessionId}
+          sessionId={sessionId}
+          info={p.infoBySession.get(sessionId)}
+          firstSeen={p.firstSeen.get(sessionId) ?? Date.now()}
+          onWatch={() => p.onWatch(sessionId)}
+          state={state}
+        />
+      ))}
+    </div>
+  );
+
   return (
-    <section className="section">
-      <div className="section-head">
-        <h2 className="section-title">Visitantes agora</h2>
-        <span className="section-count">{p.sessions.length}</span>
-      </div>
-      {p.sessions.length === 0 ? (
-        <div className="card empty-rich">
-          <span className="ico"><Users size={20} /></span>
-          <b>Nenhum visitante online</b>
-          <p>Assim que alguém abrir uma página monitorada, aparece aqui em tempo real.</p>
+    <>
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">Ao vivo · mexendo agora</h2>
+          <span className="section-count">{live.length}</span>
         </div>
-      ) : (
-        <div className="visitor-grid">
-          {p.sessions.map((sessionId) => (
-            <VisitorCard
-              key={sessionId}
-              sessionId={sessionId}
-              info={p.infoBySession.get(sessionId)}
-              firstSeen={p.firstSeen.get(sessionId) ?? Date.now()}
-              onWatch={() => p.onWatch(sessionId)}
-            />
-          ))}
-        </div>
+        {live.length === 0 ? (
+          <div className="card empty-rich">
+            <span className="ico"><Users size={20} /></span>
+            <b>Ninguém interagindo agora</b>
+            <p>Visitantes ativos na página aparecem aqui em tempo real.</p>
+          </div>
+        ) : (
+          renderCards(live, "active")
+        )}
+      </section>
+
+      {away.length > 0 && (
+        <section className="section">
+          <div className="section-head">
+            <h2 className="section-title">Em segundo plano · podem voltar</h2>
+            <span className="section-count">{away.length}</span>
+          </div>
+          {renderCards(away, "hidden")}
+        </section>
       )}
-    </section>
+    </>
   );
 }
 
