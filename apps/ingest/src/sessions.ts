@@ -14,7 +14,10 @@ import { Redis } from "ioredis";
 
 const CONTROL_CHANNEL = "control";
 
-type Command = { sessionId: string; action: "start-recording" | "stop-recording" };
+type Command = {
+  sessionId: string;
+  action: "start-recording" | "resume-recording" | "stop-recording";
+};
 
 const sockets = new Map<string, WebSocket>();
 

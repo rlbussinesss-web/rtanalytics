@@ -104,7 +104,7 @@ app.register(async (fastify) => {
     // a fresh socket with no recorder running, and would otherwise go dark
     // for as long as the viewer keeps watching.
     const rearm = setInterval(() => {
-      void sendRecordingCommand(sessionId, "start-recording").catch(() => undefined);
+      void sendRecordingCommand(sessionId, "resume-recording").catch(() => undefined);
     }, 10_000);
 
     const cleanup = () => {

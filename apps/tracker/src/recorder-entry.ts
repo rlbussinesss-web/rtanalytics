@@ -8,4 +8,6 @@
  */
 import { record } from "rrweb";
 
-(window as unknown as { rrweb: { record: typeof record } }).rrweb = { record };
+(window as unknown as {
+  rrweb: { record: typeof record; takeFullSnapshot: typeof record.takeFullSnapshot };
+}).rrweb = { record, takeFullSnapshot: record.takeFullSnapshot };

@@ -16,6 +16,8 @@ const FLUSH_INTERVAL_MS = 250;
 const MAX_FRAMES_PER_CHUNK = 500;
 
 interface RrwebGlobal {
+  /** Forces a fresh full-DOM snapshot into the stream. */
+  takeFullSnapshot?: (isCheckout?: boolean) => void;
   record: (options: {
     emit: (event: unknown) => void;
     maskAllInputs?: boolean;
@@ -81,8 +83,19 @@ export class Recorder {
     return this.stopFn !== null;
   }
 
-  async start(): Promise<void> {
-    if (this.isRecording || this.starting) return;
+  /**
+   * @param forceSnapshot true when a new viewer arrived. A viewer cannot
+   * render anything until a full DOM snapshot arrives, and rrweb only emits
+   * one when recording begins — so someone joining an in-progress recording
+   * would stare at an empty player forever without this. Keepalives pass
+   * false, since full snapshots are large and would waste bandwidth.
+   */
+  async start(forceSnapshot = false): Promise<void> {
+    if (this.isRecording) {
+      if (forceSnapshot) window.rrweb?.takeFullSnapshot?.(true);
+      return;
+    }
+    if (this.starting) return;
     this.starting = true;
 
     try {

@@ -104,9 +104,10 @@ class RTATracker {
 
   start(): void {
     this.transport.setCommandHandler((type) => {
-      if (type === "start-recording") {
-        // Re-sent every 10s by the viewer; start() is a no-op when already on.
-        void this.recorder.start().catch((err) => {
+      if (type === "start-recording" || type === "resume-recording") {
+        // "start" means a viewer just arrived and needs a fresh DOM snapshot;
+        // "resume" is the 10s keepalive that only matters after a navigation.
+        void this.recorder.start(type === "start-recording").catch((err) => {
           console.warn("[rtanalytics] could not start recorder:", err);
         });
       } else if (type === "stop-recording") {

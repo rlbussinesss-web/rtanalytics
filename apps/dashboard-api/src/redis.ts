@@ -42,9 +42,16 @@ export async function getOnlineSessions(siteId: string): Promise<string[]> {
  * ingest ignores sessions it doesn't have. That keeps ingest horizontally
  * scalable without a session-to-instance directory to maintain.
  */
+export type RecordingAction =
+  /** A new viewer arrived — start, and force a fresh DOM snapshot if already on. */
+  | "start-recording"
+  /** Periodic keepalive — start only if the visitor navigated to a new page. */
+  | "resume-recording"
+  | "stop-recording";
+
 export async function sendRecordingCommand(
   sessionId: string,
-  action: "start-recording" | "stop-recording"
+  action: RecordingAction
 ): Promise<void> {
   const redis = getRedis();
   await redis.publish("control", JSON.stringify({ sessionId, action }));
