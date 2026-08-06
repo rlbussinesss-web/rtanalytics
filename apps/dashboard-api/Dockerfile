@@ -9,7 +9,6 @@ COPY apps/dashboard-api ./apps/dashboard-api
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @rtanalytics/dashboard-api... build
-RUN pnpm prune --prod
 
 FROM node:22-alpine AS runtime
 RUN corepack enable

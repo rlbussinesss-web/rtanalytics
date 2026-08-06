@@ -10,7 +10,6 @@ COPY apps/ingest ./apps/ingest
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @rtanalytics/ingest... build
-RUN pnpm prune --prod
 
 FROM node:22-alpine AS runtime
 RUN corepack enable

@@ -9,7 +9,6 @@ COPY apps/workers ./apps/workers
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm --filter @rtanalytics/workers... build
-RUN pnpm prune --prod
 
 FROM node:22-alpine AS runtime
 RUN corepack enable
