@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Replayer } from "rrweb";
 import "rrweb/dist/style.css";
-import { Bug, EyeOff, Flame, LogOut, MousePointerClick, Pause, Play, Plus, Star, X } from "lucide-react";
+import { Bug, EyeOff, Flame, LogOut, MousePointerClick, Pause, Play, Plus, Star, X, Zap } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
 import { avatarFor, deviceLabel, flag, fmtDuration } from "./lib/ui";
 
@@ -21,26 +21,30 @@ interface ReplaySummary {
   entryPath: string | null;
   favorite: boolean;
   tags: string[];
+  conversions: string[];
 }
+
+type ReplayTab = "all" | "pix" | "fav";
 
 export function ReplaysPanel({ siteId }: { siteId: string }) {
   const [replays, setReplays] = useState<ReplaySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState<string | null>(null);
-  const [favOnly, setFavOnly] = useState(false);
+  const [tab, setTab] = useState<ReplayTab>("all");
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch(
-        `${API_BASE_URL}/api/sites/${siteId}/replays${favOnly ? "?favorites=true" : ""}`,
-        { headers: { Authorization: `Bearer ${getToken() ?? ""}` } }
-      );
+      const query =
+        tab === "fav" ? "?favorites=true" : tab === "pix" ? "?conversion=pix_gerado" : "";
+      const res = await fetch(`${API_BASE_URL}/api/sites/${siteId}/replays${query}`, {
+        headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+      });
       if (res.ok) setReplays((await res.json()).replays as ReplaySummary[]);
     } finally {
       setLoading(false);
     }
-  }, [siteId, favOnly]);
+  }, [siteId, tab]);
 
   useEffect(() => {
     void load();
@@ -62,8 +66,11 @@ export function ReplaysPanel({ siteId }: { siteId: string }) {
   return (
     <section>
       <div className="segment" style={{ marginBottom: 16 }}>
-        <button className={!favOnly ? "is-active" : ""} onClick={() => setFavOnly(false)}>Todas</button>
-        <button className={favOnly ? "is-active" : ""} onClick={() => setFavOnly(true)}>
+        <button className={tab === "all" ? "is-active" : ""} onClick={() => setTab("all")}>Todas</button>
+        <button className={tab === "pix" ? "is-active" : ""} onClick={() => setTab("pix")}>
+          <Zap size={13} /> Pix gerado
+        </button>
+        <button className={tab === "fav" ? "is-active" : ""} onClick={() => setTab("fav")}>
           <Star size={13} /> Favoritas
         </button>
       </div>
@@ -71,9 +78,19 @@ export function ReplaysPanel({ siteId }: { siteId: string }) {
       {loading && <p className="empty">Carregando…</p>}
       {!loading && replays.length === 0 && (
         <div className="card empty-rich">
-          <span className="ico"><MousePointerClick size={20} /></span>
-          <b>Nenhuma gravação {favOnly ? "favorita" : "ainda"}</b>
-          <p>Assista uma sessão ao vivo — ela fica gravada para rever aqui depois.</p>
+          <span className="ico">{tab === "pix" ? <Zap size={20} /> : <MousePointerClick size={20} />}</span>
+          <b>
+            {tab === "pix"
+              ? "Nenhuma gravação com Pix gerado"
+              : tab === "fav"
+              ? "Nenhuma gravação favorita"
+              : "Nenhuma gravação ainda"}
+          </b>
+          <p>
+            {tab === "pix"
+              ? "Sessões que chegaram na tela do Pix e foram gravadas aparecem aqui."
+              : "Assista uma sessão ao vivo — ela fica gravada para rever aqui depois."}
+          </p>
         </div>
       )}
 
@@ -135,6 +152,14 @@ function ReplayCard({
       </div>
 
       <div className="vc-meta">
+        {r.conversions.includes("pix_gerado") && (
+          <span className="chip chip-good"><Zap />Pix gerado</span>
+        )}
+        {r.conversions
+          .filter((c) => c !== "pix_gerado")
+          .map((c) => (
+            <span key={c} className="chip chip-good"><Zap />{c}</span>
+          ))}
         {r.rageClicks > 0 && <span className="chip chip-warn"><Flame />{r.rageClicks} rage</span>}
         {r.errors > 0 && <span className="chip chip-bad"><Bug />{r.errors} erro(s)</span>}
         {r.entryPath && <span className="chip">{r.entryPath}</span>}

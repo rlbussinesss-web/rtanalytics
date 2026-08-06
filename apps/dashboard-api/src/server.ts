@@ -85,13 +85,14 @@ app.get("/api/sites/:siteId/heatmap", async (req) => {
 
 app.get("/api/sites/:siteId/replays", async (req) => {
   const { siteId } = req.params as { siteId: string };
-  const q = req.query as { favorites?: string; device?: string; tag?: string };
+  const q = req.query as { favorites?: string; device?: string; tag?: string; conversion?: string };
   return {
     siteId,
     replays: await listReplays(siteId, {
       favoritesOnly: q.favorites === "true",
       device: q.device,
       tag: q.tag,
+      conversion: q.conversion,
     }),
     tags: await listTags(siteId),
   };

@@ -26,12 +26,16 @@ export interface ReplaySummary {
   entryPath: string | null;
   favorite: boolean;
   tags: string[];
+  /** Conversion goals this session fired (e.g. ["pix_gerado"]). */
+  conversions: string[];
 }
 
 export interface ReplayFilter {
   favoritesOnly?: boolean;
   device?: string;
   tag?: string;
+  /** Only sessions that fired this conversion goal. */
+  conversion?: string;
 }
 
 export async function listReplays(siteId: string, filter: ReplayFilter = {}): Promise<ReplaySummary[]> {
@@ -45,6 +49,10 @@ export async function listReplays(siteId: string, filter: ReplayFilter = {}): Pr
   if (filter.tag) {
     params.push(filter.tag);
     conds.push(`$${params.length} = ANY(m.tags)`);
+  }
+  if (filter.conversion) {
+    params.push(filter.conversion);
+    conds.push(`$${params.length} = ANY(ev.conversions)`);
   }
 
   const rows = await query<{
@@ -63,11 +71,12 @@ export async function listReplays(siteId: string, filter: ReplayFilter = {}): Pr
     entry: string | null;
     favorite: boolean | null;
     tags: string[] | null;
+    conversions: string[] | null;
   }>(
     `SELECT r.session_id,
             r.chunks, r.started, r.ended,
             ev.duration, ev.pages, ev.clicks, ev.rage, ev.errors,
-            ev.country, ev.device, ev.browser, ev.entry,
+            ev.country, ev.device, ev.browser, ev.entry, ev.conversions,
             m.favorite, m.tags
        FROM (
          SELECT session_id, count(*)::int AS chunks, min(time) AS started, max(time) AS ended
@@ -81,7 +90,9 @@ export async function listReplays(siteId: string, filter: ReplayFilter = {}): Pr
            count(*) FILTER (WHERE event_type='click' AND (payload->>'rage')::boolean)::int AS rage,
            count(*) FILTER (WHERE event_type='error')::int AS errors,
            max(country) AS country, max(device) AS device, max(browser) AS browser,
-           (array_agg(path ORDER BY time) FILTER (WHERE event_type='pageview'))[1] AS entry
+           (array_agg(path ORDER BY time) FILTER (WHERE event_type='pageview'))[1] AS entry,
+           array_agg(DISTINCT payload->>'name')
+             FILTER (WHERE event_type='conversion' AND payload ? 'name') AS conversions
            FROM events e WHERE e.site_id = $1 AND e.session_id = r.session_id
        ) ev ON true
        LEFT JOIN session_meta m ON m.site_id = $1 AND m.session_id = r.session_id
@@ -107,6 +118,7 @@ export async function listReplays(siteId: string, filter: ReplayFilter = {}): Pr
     entryPath: r.entry,
     favorite: r.favorite ?? false,
     tags: r.tags ?? [],
+    conversions: r.conversions ?? [],
   }));
 }
 
