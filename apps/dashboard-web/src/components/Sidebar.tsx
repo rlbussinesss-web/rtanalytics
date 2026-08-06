@@ -3,6 +3,7 @@ import {
   BarChart3,
   ChevronsUpDown,
   Filter,
+  Flame,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -11,7 +12,7 @@ import {
 } from "lucide-react";
 import { avatarFor } from "../lib/ui";
 
-export type ViewKey = "overview" | "live" | "metrics" | "funnel" | "replays";
+export type ViewKey = "overview" | "live" | "metrics" | "funnel" | "heatmaps" | "replays";
 
 const NAV: { group: string; items: { key: ViewKey; label: string; icon: React.ReactNode }[] }[] = [
   {
@@ -19,6 +20,7 @@ const NAV: { group: string; items: { key: ViewKey; label: string; icon: React.Re
     items: [
       { key: "overview", label: "Visão geral", icon: <LayoutDashboard /> },
       { key: "metrics", label: "Métricas", icon: <BarChart3 /> },
+      { key: "heatmaps", label: "Mapas de calor", icon: <Flame /> },
       { key: "funnel", label: "Funil", icon: <Filter /> },
     ],
   },

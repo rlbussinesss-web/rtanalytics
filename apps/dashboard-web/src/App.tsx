@@ -7,6 +7,7 @@ import { useTheme } from "./useTheme";
 import { LiveScreen } from "./LiveScreen";
 import { MetricsPanel } from "./MetricsPanel";
 import { FunnelPanel } from "./FunnelPanel";
+import { HeatmapView } from "./HeatmapView";
 import { ReplaysPanel } from "./ReplaysPanel";
 import type { RangeKey } from "./useMetrics";
 import { Sidebar, type ViewKey } from "./components/Sidebar";
@@ -22,6 +23,7 @@ const VIEW_TITLES: Record<ViewKey, string> = {
   overview: "Visão geral",
   live: "Ao vivo",
   metrics: "Métricas",
+  heatmaps: "Mapas de calor",
   funnel: "Funil",
   replays: "Gravações",
 };
@@ -162,6 +164,12 @@ function Dashboard({
             )}
             {view === "metrics" && (
               <MetricsPanel siteId={siteId} range={range} onRangeChange={setRange} />
+            )}
+            {view === "heatmaps" && (
+              <>
+                <RangeSegment range={range} onChange={setRange} />
+                <HeatmapView siteId={siteId} range={range} />
+              </>
             )}
             {view === "funnel" && (
               <>

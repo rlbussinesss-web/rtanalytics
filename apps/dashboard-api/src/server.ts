@@ -13,6 +13,7 @@ import { extractToken, isValidToken } from "./auth.js";
 import { computeMetrics, type RangeKey } from "./metrics.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames } from "./replays.js";
+import { computeHeatmap } from "./heatmap.js";
 
 const PORT = Number(process.env.DASHBOARD_API_PORT ?? process.env.PORT ?? 8082);
 
@@ -72,6 +73,13 @@ app.post("/api/sites/:siteId/funnel", async (req, reply) => {
     return reply.code(400).send({ error: "funnel needs at least 2 steps" });
   }
   return { range, steps: await computeFunnel(siteId, range, steps.slice(0, 10)) };
+});
+
+app.get("/api/sites/:siteId/heatmap", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string; path?: string };
+  const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "24h";
+  return computeHeatmap(siteId, q.path ?? "", range);
 });
 
 app.get("/api/sites/:siteId/replays", async (req) => {
