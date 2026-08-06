@@ -227,6 +227,21 @@ body {
   grid-template-columns: auto 1fr auto;
 }
 
+.session-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.meta-line {
+  font-size: 11.5px;
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .event-row {
   grid-template-columns: 104px 1fr 88px 74px;
   font-size: 13px;

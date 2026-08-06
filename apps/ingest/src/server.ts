@@ -5,6 +5,8 @@ import { parseTrackerEvent } from "@rtanalytics/protocol";
 import { publishEvent } from "./stream.js";
 import { touchPresence, publishLiveEvent, publishReplayChunk } from "./redis.js";
 import { registerSession, unregisterSession, connectionCount, subscribeToCommands } from "./sessions.js";
+import { enrichFromConnection } from "./enrich.js";
+import type { EnrichedFields } from "@rtanalytics/shared-types";
 
 const PORT = Number(process.env.INGEST_PORT ?? process.env.PORT ?? 8081);
 
@@ -26,7 +28,10 @@ function isSiteAllowed(siteId: string): boolean {
   return ALLOWED_SITE_IDS.size === 0 || ALLOWED_SITE_IDS.has(siteId);
 }
 
-const app = Fastify({ logger: true });
+// trustProxy makes req.ip read X-Forwarded-For, which is how the real visitor
+// IP reaches us behind Railway's proxy — without it every visitor would look
+// like they came from the proxy's address and geo would be useless.
+const app = Fastify({ logger: true, trustProxy: true });
 
 await app.register(websocketPlugin);
 
@@ -40,13 +45,17 @@ app.get("/healthz", async () => ({
 }));
 
 app.register(async (fastify) => {
-  fastify.get("/", { websocket: true }, (socket: WebSocket) => {
+  fastify.get("/", { websocket: true }, (socket: WebSocket, req) => {
     // The session id only becomes known once the first event arrives, so the
     // registry is populated lazily and cleaned up on close.
     let sessionId: string | null = null;
 
+    // IP and User-Agent are constant for a connection, so enrich once here
+    // rather than on every event.
+    const enrichment = enrichFromConnection(req.ip, req.headers["user-agent"]);
+
     socket.on("message", (raw: Buffer) => {
-      void handleMessage(socket, raw, (id) => {
+      void handleMessage(socket, raw, enrichment, (id) => {
         if (sessionId !== id) {
           sessionId = id;
           registerSession(id, socket);
@@ -67,6 +76,7 @@ app.register(async (fastify) => {
 async function handleMessage(
   socket: WebSocket,
   raw: Buffer,
+  enrichment: EnrichedFields,
   onSessionKnown: (sessionId: string) => void
 ): Promise<void> {
   let parsedJson: unknown;
@@ -102,16 +112,20 @@ async function handleMessage(
     return;
   }
 
+  // Attach server-derived geo/device fields so both the persisted row and the
+  // live dashboard carry them.
+  const enriched = { ...event, ...enrichment };
+
   try {
     // The durable write (publishEvent) must settle before we ack the client,
     // so a client that got an ack knows its event is in the log. Presence and
     // live fan-out are best-effort and never fail the whole message.
     await Promise.all([
-      publishEvent(event.siteId, event.eventType, event),
-      touchPresence(event.siteId, event.sessionId).catch((err) =>
+      publishEvent(enriched.siteId, enriched.eventType, enriched),
+      touchPresence(enriched.siteId, enriched.sessionId).catch((err) =>
         app.log.warn({ err }, "presence update failed")
       ),
-      publishLiveEvent(event.siteId, event).catch((err) =>
+      publishLiveEvent(enriched.siteId, enriched).catch((err) =>
         app.log.warn({ err }, "live pubsub publish failed")
       ),
     ]);

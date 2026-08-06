@@ -9,6 +9,12 @@ export interface LiveEvent {
   path: string;
   timestamp: number;
   payload?: Record<string, unknown>;
+  // Server-enriched fields (may be absent for older events or unknown IPs).
+  country?: string;
+  city?: string;
+  device?: string;
+  browser?: string;
+  os?: string;
 }
 
 import { WS_BASE_URL, getToken } from "./token";

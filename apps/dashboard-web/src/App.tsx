@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useLiveEvents } from "./useLiveEvents";
+import { useLiveEvents, type LiveEvent } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
 import { LiveScreen } from "./LiveScreen";
@@ -74,11 +74,11 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const sessions = useSessions(siteId, events);
   const [watching, setWatching] = useState<string | null>(null);
 
-  // Most recent path per session, so the visitor list shows where each one is.
-  const pathBySession = useMemo(() => {
-    const map = new Map<string, string>();
+  // Most recent path + enrichment per session, for the visitor list.
+  const infoBySession = useMemo(() => {
+    const map = new Map<string, LiveEvent>();
     for (const event of events) {
-      if (!map.has(event.sessionId)) map.set(event.sessionId, event.path);
+      if (!map.has(event.sessionId)) map.set(event.sessionId, event);
     }
     return map;
   }, [events]);
@@ -116,18 +116,24 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </div>
         <ul className="list">
           {sessions.length === 0 && <li className="empty">Nenhum visitante online.</li>}
-          {sessions.map((sessionId) => (
-            <li key={sessionId} className="row session-row">
-              <span className="mono">{sessionId.slice(0, 8)}</span>
-              <span className="path">{pathBySession.get(sessionId) ?? "—"}</span>
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={() => setWatching(sessionId)}
-              >
-                Assistir ao vivo
-              </button>
-            </li>
-          ))}
+          {sessions.map((sessionId) => {
+            const info = infoBySession.get(sessionId);
+            return (
+              <li key={sessionId} className="row session-row">
+                <span className="mono">{sessionId.slice(0, 8)}</span>
+                <div className="session-meta">
+                  <span className="path">{info?.path ?? "—"}</span>
+                  <span className="meta-line">{describeVisitor(info)}</span>
+                </div>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={() => setWatching(sessionId)}
+                >
+                  Assistir ao vivo
+                </button>
+              </li>
+            );
+          })}
         </ul>
       </section>
 
@@ -160,6 +166,33 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
       )}
     </div>
   );
+}
+
+/** Turns a two-letter country code into its flag emoji (BR → 🇧🇷). */
+function flag(country?: string): string {
+  if (!country || country.length !== 2) return "";
+  const A = 0x1f1e6;
+  return String.fromCodePoint(
+    A + country.charCodeAt(0) - 65,
+    A + country.charCodeAt(1) - 65
+  );
+}
+
+/** One-line "🇧🇷 São Paulo · Chrome · Windows · celular" summary. */
+function describeVisitor(info?: LiveEvent): string {
+  if (!info) return "—";
+  const deviceLabels: Record<string, string> = {
+    mobile: "celular",
+    tablet: "tablet",
+    desktop: "desktop",
+  };
+  const parts = [
+    [flag(info.country), info.city].filter(Boolean).join(" "),
+    info.browser,
+    info.os,
+    info.device ? deviceLabels[info.device] ?? info.device : undefined,
+  ].filter(Boolean);
+  return parts.length ? parts.join(" · ") : "localizando…";
 }
 
 function Stat({ value, label }: { value: number; label: string }) {
