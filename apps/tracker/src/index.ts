@@ -12,6 +12,8 @@ interface TrackerConfig {
   wsUrl: string;
   /** Where the on-demand rrweb recorder bundle is hosted. */
   recorderUrl: string;
+  /** URL-triggered conversions: reaching a path auto-fires a named conversion. */
+  conversionPaths: { name: string; path: string }[];
 }
 
 function readConfigFromScriptTag(): TrackerConfig {
@@ -39,7 +41,18 @@ function readConfigFromScriptTag(): TrackerConfig {
     current?.dataset.recorderUrl ??
     (current?.src ? current.src.replace(/[^/]+$/, "recorder.js") : "/recorder.js");
 
-  return { siteId, wsUrl: configured ?? "ws://localhost:8081", recorderUrl };
+  // data-conversion-paths="pix_gerado:/pagamento,recarga:/recarga" — reaching a
+  // path auto-fires the named conversion. Generation is on-screen, so this is
+  // reliable (unlike detecting an actual payment).
+  const conversionPaths = (current?.dataset.conversionPaths ?? "")
+    .split(",")
+    .map((pair) => {
+      const i = pair.indexOf(":");
+      return { name: pair.slice(0, i).trim(), path: pair.slice(i + 1).trim() };
+    })
+    .filter((c) => c.name && c.path);
+
+  return { siteId, wsUrl: configured ?? "ws://localhost:8081", recorderUrl, conversionPaths };
 }
 
 class RTATracker {
@@ -50,6 +63,7 @@ class RTATracker {
   private readonly startedAt = Date.now();
 
   private readonly recorder: Recorder;
+  private readonly firedConversions = new Set<string>();
 
   constructor(config: TrackerConfig) {
     this.config = config;
@@ -118,6 +132,39 @@ class RTATracker {
     return { visitorId: this.visitorId, sessionId: this.sessionId };
   }
 
+  /**
+   * Fires configured URL-triggered conversions when the current path matches,
+   * at most once per session per goal (a reload of the same page shouldn't
+   * double-count). Called on load and on SPA navigations.
+   */
+  private checkConversionPaths(): void {
+    const p = location.pathname;
+    for (const c of this.config.conversionPaths) {
+      const matches = p === c.path || p.startsWith(c.path.replace(/\/?$/, "/"));
+      if (matches && !this.hasFired(c.name)) {
+        this.markFired(c.name);
+        this.track(c.name);
+      }
+    }
+  }
+
+  private hasFired(name: string): boolean {
+    try {
+      return sessionStorage.getItem("rta_conv_" + name) === "1";
+    } catch {
+      return this.firedConversions.has(name);
+    }
+  }
+
+  private markFired(name: string): void {
+    this.firedConversions.add(name);
+    try {
+      sessionStorage.setItem("rta_conv_" + name, "1");
+    } catch {
+      /* sessionStorage unavailable — in-memory dedupe still applies */
+    }
+  }
+
   private trackHeartbeat(): void {
     this.transport.send({
       ...this.baseEnvelope(),
@@ -143,7 +190,24 @@ class RTATracker {
 
     this.transport.connect();
     this.trackPageview();
+    this.checkConversionPaths();
     setInterval(() => this.trackHeartbeat(), HEARTBEAT_INTERVAL_MS);
+
+    // Catch SPA navigations (history API + back/forward) so a client-routed
+    // arrival at /pagamento still fires the conversion. Full page loads are
+    // already covered by the check above.
+    if (this.config.conversionPaths.length > 0) {
+      const recheck = () => setTimeout(() => this.checkConversionPaths(), 0);
+      for (const m of ["pushState", "replaceState"] as const) {
+        const orig = history[m];
+        history[m] = function (this: History, ...args: unknown[]) {
+          const r = (orig as (...a: unknown[]) => unknown).apply(this, args);
+          recheck();
+          return r;
+        } as typeof history[typeof m];
+      }
+      window.addEventListener("popstate", recheck);
+    }
 
     // Always-on behavioural capture (clicks, scroll, errors, web vitals).
     installBehavior((eventType, payload) => {
