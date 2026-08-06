@@ -232,6 +232,98 @@ body {
   font-weight: 550;
 }
 
+/* --------------------------------------------------------------- funnel */
+
+.funnel-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .funnel-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.funnel-config {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.funnel-step-edit {
+  display: grid;
+  grid-template-columns: 96px 1fr auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.funnel-kind {
+  padding: 8px 6px;
+}
+
+.funnel-actions {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+}
+
+.funnel-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.funnel-bar-row {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.funnel-bar-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.funnel-step-label {
+  font-weight: 550;
+}
+
+.funnel-step-num {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.funnel-rate {
+  color: var(--text-faint);
+  font-weight: 450;
+}
+
+.funnel-track {
+  height: 34px;
+  background: var(--surface-2);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.funnel-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, #fff));
+  border-radius: 8px;
+  transition: width 0.4s ease;
+  min-width: 2px;
+}
+
+.funnel-drop {
+  font-size: 12px;
+  color: var(--danger);
+  padding-left: 2px;
+}
+
 /* ---------------------------------------------------------------- pills */
 
 .pill {

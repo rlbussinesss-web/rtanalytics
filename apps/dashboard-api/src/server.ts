@@ -11,6 +11,8 @@ import {
 } from "./redis.js";
 import { extractToken, isValidToken } from "./auth.js";
 import { computeMetrics, type RangeKey } from "./metrics.js";
+import { computeFunnel, type FunnelStepInput } from "./funnel.js";
+import { listReplays, getReplayFrames } from "./replays.js";
 
 const PORT = Number(process.env.DASHBOARD_API_PORT ?? process.env.PORT ?? 8082);
 
@@ -56,6 +58,30 @@ app.get("/api/sites/:siteId/metrics", async (req) => {
   const range: RangeKey =
     q.range === "7d" || q.range === "30d" ? q.range : "24h";
   return computeMetrics(siteId, range);
+});
+
+app.post("/api/sites/:siteId/funnel", async (req, reply) => {
+  const { siteId } = req.params as { siteId: string };
+  const body = req.body as { range?: string; steps?: FunnelStepInput[] };
+  const range: RangeKey =
+    body.range === "7d" || body.range === "30d" ? body.range : "24h";
+  const steps = (body.steps ?? []).filter(
+    (s) => (s.kind === "path" || s.kind === "event") && typeof s.value === "string" && s.value
+  );
+  if (steps.length < 2) {
+    return reply.code(400).send({ error: "funnel needs at least 2 steps" });
+  }
+  return { range, steps: await computeFunnel(siteId, range, steps.slice(0, 10)) };
+});
+
+app.get("/api/sites/:siteId/replays", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  return { siteId, replays: await listReplays(siteId) };
+});
+
+app.get("/api/sites/:siteId/replays/:sessionId", async (req) => {
+  const { siteId, sessionId } = req.params as { siteId: string; sessionId: string };
+  return { sessionId, frames: await getReplayFrames(siteId, sessionId) };
 });
 
 app.register(async (fastify) => {

@@ -77,3 +77,31 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
   const client = getPool();
   await client.query(sql, values);
 }
+
+export interface ReplayChunkRow {
+  siteId: string;
+  sessionId: string;
+  seq: number;
+  frames: unknown;
+  time: Date;
+}
+
+/** Batch inserts recorded replay chunks for later playback. */
+export async function insertReplayChunks(rows: ReplayChunkRow[]): Promise<void> {
+  if (rows.length === 0) return;
+  const values: unknown[] = [];
+  const placeholders: string[] = [];
+  rows.forEach((row, i) => {
+    const b = i * 5;
+    placeholders.push(`($${b + 1}, $${b + 2}, $${b + 3}, $${b + 4}, $${b + 5})`);
+    values.push(
+      row.siteId,
+      row.sessionId,
+      row.seq,
+      JSON.stringify(row.frames),
+      row.time
+    );
+  });
+  const sql = `INSERT INTO replay_chunks (site_id, session_id, seq, frames, time) VALUES ${placeholders.join(", ")}`;
+  await getPool().query(sql, values);
+}

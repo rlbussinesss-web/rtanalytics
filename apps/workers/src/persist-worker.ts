@@ -11,6 +11,7 @@
 import { Redis } from "ioredis";
 import { insertEventsBatch, type EventInsertRow } from "./db.js";
 import { runMigrations } from "./migrate.js";
+import { runReplayConsumer } from "./replay-consumer.js";
 
 const STREAM = "events";
 const GROUP = "persist-workers";
@@ -50,6 +51,17 @@ function toRow(payloadJson: string): EventInsertRow {
 
 async function main(): Promise<void> {
   await runMigrations();
+
+  // Replay chunks are persisted by an independent consumer on its own
+  // connection, running concurrently with the events consumer below. If it
+  // ever throws, take the whole process down so Railway restarts it rather
+  // than silently losing replay recording.
+  void runReplayConsumer(process.env.REDIS_URL ?? "redis://localhost:6379").catch(
+    (err) => {
+      console.error("[replay-consumer] fatal", err);
+      process.exit(1);
+    }
+  );
 
   const redis = createRedis();
 

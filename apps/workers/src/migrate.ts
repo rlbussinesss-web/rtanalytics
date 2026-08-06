@@ -39,6 +39,20 @@ CREATE INDEX IF NOT EXISTS idx_events_site_time ON events (site_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events (session_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events (event_type, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_payload_gin ON events USING GIN (payload);
+
+-- Recorded replay frames: one row per chunk. Kept separate from events
+-- because frames are bulky and only read when replaying a specific session.
+CREATE TABLE IF NOT EXISTS replay_chunks (
+    id          BIGSERIAL   PRIMARY KEY,
+    site_id     TEXT        NOT NULL,
+    session_id  TEXT        NOT NULL,
+    seq         INTEGER     NOT NULL,
+    frames      JSONB       NOT NULL,
+    time        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_replay_session ON replay_chunks (site_id, session_id, seq);
+CREATE INDEX IF NOT EXISTS idx_replay_time ON replay_chunks (site_id, time DESC);
 `;
 
 const TIMESCALE_SETUP = `

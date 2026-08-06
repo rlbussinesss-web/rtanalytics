@@ -14,6 +14,8 @@ export interface Metrics {
   sessions: number;
   pageviews: number;
   events: number;
+  conversions: number;
+  conversionRate: number;
   avgSessionSec: number;
   bounceRate: number;
   timeseries: { bucket: string; visitors: number }[];

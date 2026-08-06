@@ -4,6 +4,8 @@ import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
 import { LiveScreen } from "./LiveScreen";
 import { MetricsPanel } from "./MetricsPanel";
+import { FunnelPanel } from "./FunnelPanel";
+import { ReplaysPanel } from "./ReplaysPanel";
 import type { RangeKey } from "./useMetrics";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
 import "./styles.css";
@@ -75,7 +77,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const onlineCount = useOnlineCount(siteId, events);
   const sessions = useSessions(siteId, events);
   const [watching, setWatching] = useState<string | null>(null);
-  const [tab, setTab] = useState<"live" | "metrics">("live");
+  const [tab, setTab] = useState<"live" | "metrics" | "funnel" | "replays">("live");
   const [range, setRange] = useState<RangeKey>("24h");
 
   // Most recent path + enrichment per session, for the visitor list.
@@ -120,13 +122,41 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         >
           Métricas
         </button>
+        <button
+          className={`tab${tab === "funnel" ? " is-active" : ""}`}
+          onClick={() => setTab("funnel")}
+        >
+          Funil
+        </button>
+        <button
+          className={`tab${tab === "replays" ? " is-active" : ""}`}
+          onClick={() => setTab("replays")}
+        >
+          Gravações
+        </button>
       </nav>
 
-      {tab === "metrics" ? (
+      {tab === "live" && <LiveView />}
+      {tab === "metrics" && (
         <MetricsPanel siteId={siteId} range={range} onRangeChange={setRange} />
-      ) : (
-        <LiveView />
       )}
+      {tab === "funnel" && (
+        <>
+          <div className="range-tabs">
+            {(["24h", "7d", "30d"] as RangeKey[]).map((r) => (
+              <button
+                key={r}
+                className={`range-tab${r === range ? " is-active" : ""}`}
+                onClick={() => setRange(r)}
+              >
+                {r === "24h" ? "24 horas" : r === "7d" ? "7 dias" : "30 dias"}
+              </button>
+            ))}
+          </div>
+          <FunnelPanel siteId={siteId} range={range} />
+        </>
+      )}
+      {tab === "replays" && <ReplaysPanel siteId={siteId} />}
 
       {watching && (
         <LiveScreen siteId={siteId} sessionId={watching} onClose={() => setWatching(null)} />

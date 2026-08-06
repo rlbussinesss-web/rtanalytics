@@ -94,6 +94,15 @@ export const replayChunkSchema = z.object({
   }),
 });
 
+export const conversionSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("conversion"),
+  payload: z.object({
+    name: z.string().min(1).max(128),
+    value: z.number().optional(),
+  }),
+});
+
 /** Discriminated union covering every event type the ingest server accepts. */
 export const trackerEventSchema = z.discriminatedUnion("eventType", [
   pageviewSchema,
@@ -103,6 +112,7 @@ export const trackerEventSchema = z.discriminatedUnion("eventType", [
   webVitalsSchema,
   errorSchema,
   replayChunkSchema,
+  conversionSchema,
 ]);
 
 export type PageviewEvent = z.infer<typeof pageviewSchema>;
@@ -112,6 +122,7 @@ export type ScrollEvent = z.infer<typeof scrollSchema>;
 export type WebVitalsEvent = z.infer<typeof webVitalsSchema>;
 export type ErrorEvent = z.infer<typeof errorSchema>;
 export type ReplayChunkEvent = z.infer<typeof replayChunkSchema>;
+export type ConversionEvent = z.infer<typeof conversionSchema>;
 export type TrackerEvent = z.infer<typeof trackerEventSchema>;
 
 /**

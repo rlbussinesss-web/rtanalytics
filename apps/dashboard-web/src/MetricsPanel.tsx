@@ -46,6 +46,8 @@ function MetricsBody({ m }: { m: Metrics }) {
         <Stat value={String(m.pageviews)} label="pageviews" />
         <Stat value={fmtDuration(m.avgSessionSec)} label="tempo médio de sessão" />
         <Stat value={`${Math.round(m.bounceRate * 100)}%`} label="taxa de rejeição" />
+        <Stat value={String(m.conversions)} label="conversões" />
+        <Stat value={`${(m.conversionRate * 100).toFixed(1)}%`} label="taxa de conversão" />
       </div>
 
       <section className="section">

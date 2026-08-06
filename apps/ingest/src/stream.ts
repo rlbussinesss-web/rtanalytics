@@ -14,8 +14,11 @@ import { getRedis } from "./redis.js";
  */
 export const EVENTS_STREAM = "events";
 export const EVENTS_GROUP = "persist-workers";
+export const REPLAY_STREAM = "replay";
 
 const MAX_STREAM_LEN = 1_000_000;
+// Replay frames are bulky; keep a shorter buffer in front of the DB.
+const MAX_REPLAY_STREAM_LEN = 200_000;
 
 export async function publishEvent(
   siteId: string,
@@ -35,5 +38,35 @@ export async function publishEvent(
     eventType,
     "payload",
     JSON.stringify(data)
+  );
+}
+
+/**
+ * Durably records a replay chunk so the session can be watched again later.
+ * Separate from the live pub/sub fan-out: pub/sub reaches whoever is watching
+ * now, this stream feeds the worker that writes frames to Postgres for
+ * on-demand playback of past sessions.
+ */
+export async function recordReplayChunk(
+  siteId: string,
+  sessionId: string,
+  seq: number,
+  frames: unknown
+): Promise<void> {
+  const redis = getRedis();
+  await redis.xadd(
+    REPLAY_STREAM,
+    "MAXLEN",
+    "~",
+    MAX_REPLAY_STREAM_LEN,
+    "*",
+    "siteId",
+    siteId,
+    "sessionId",
+    sessionId,
+    "seq",
+    String(seq),
+    "frames",
+    JSON.stringify(frames)
   );
 }

@@ -92,6 +92,21 @@ class RTATracker {
     });
   }
 
+  /**
+   * Records a conversion. Called by the site as `window.rta.track('purchase')`
+   * or with a value: `window.rta.track('purchase', 79.9)`. Generic on purpose —
+   * "conversion" is whatever the site decides matters (a sale, a signup, a
+   * form submit), so the funnel and conversion-rate metrics work for any goal.
+   */
+  track(name: string, value?: number): void {
+    if (!name) return;
+    this.transport.send({
+      ...this.baseEnvelope(),
+      eventType: "conversion",
+      payload: { name: String(name).slice(0, 128), value },
+    });
+  }
+
   private trackHeartbeat(): void {
     this.transport.send({
       ...this.baseEnvelope(),

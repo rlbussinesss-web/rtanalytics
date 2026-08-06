@@ -2,7 +2,7 @@ import Fastify from "fastify";
 import websocketPlugin from "@fastify/websocket";
 import type { WebSocket } from "ws";
 import { parseTrackerEvent } from "@rtanalytics/protocol";
-import { publishEvent } from "./stream.js";
+import { publishEvent, recordReplayChunk } from "./stream.js";
 import { touchPresence, publishLiveEvent, publishReplayChunk } from "./redis.js";
 import { registerSession, unregisterSession, connectionCount, subscribeToCommands } from "./sessions.js";
 import { enrichFromConnection } from "./enrich.js";
@@ -106,9 +106,19 @@ async function handleMessage(
   // whoever is watching right now, and would drown both the event log and the
   // dashboard's activity feed. They go straight to that session's channel.
   if (event.eventType === "replay-chunk") {
-    await publishReplayChunk(event.siteId, event.sessionId, event).catch((err) =>
-      app.log.warn({ err }, "replay chunk publish failed")
-    );
+    await Promise.all([
+      // Live fan-out to whoever is watching this session right now.
+      publishReplayChunk(event.siteId, event.sessionId, event).catch((err) =>
+        app.log.warn({ err }, "replay chunk publish failed")
+      ),
+      // Durable copy so the session can be replayed later.
+      recordReplayChunk(
+        event.siteId,
+        event.sessionId,
+        event.payload.seq,
+        event.payload.frames
+      ).catch((err) => app.log.warn({ err }, "replay chunk record failed")),
+    ]);
     return;
   }
 

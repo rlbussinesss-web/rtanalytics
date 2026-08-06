@@ -18,7 +18,8 @@ export type EventType =
   | "scroll"
   | "web-vitals"
   | "error"
-  | "replay-chunk";
+  | "replay-chunk"
+  | "conversion";
 
 /** Fields common to every event envelope, regardless of type. */
 export interface BaseEvent {
@@ -130,6 +131,18 @@ export interface ReplayChunkEvent extends BaseEvent {
   payload: ReplayChunkPayload;
 }
 
+export interface ConversionPayload {
+  /** Site-defined goal name, e.g. "purchase", "signup". */
+  name: string;
+  /** Optional monetary or numeric value of the conversion. */
+  value?: number;
+}
+
+export interface ConversionEvent extends BaseEvent {
+  eventType: "conversion";
+  payload: ConversionPayload;
+}
+
 /** Commands the server pushes down to a connected tracker. */
 export type TrackerCommand =
   | { type: "start-recording" }
@@ -143,7 +156,8 @@ export type TrackerEvent =
   | ScrollEvent
   | WebVitalsEvent
   | ErrorEvent
-  | ReplayChunkEvent;
+  | ReplayChunkEvent
+  | ConversionEvent;
 
 /** Enriched fields that ingest attaches server-side before persistence/broadcast. */
 export interface EnrichedFields {
