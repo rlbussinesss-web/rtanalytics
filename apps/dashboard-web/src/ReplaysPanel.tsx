@@ -343,6 +343,19 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
     return () => cancelAnimationFrame(rafRef.current);
   }, [totalMs, startTicking]);
 
+  // The away overlay is a momentary notice, not a persistent block: it appears
+  // when playback enters an away episode and clears itself after a beat so the
+  // (frozen) screen stays visible without the viewer clicking anything. The
+  // header badge below keeps the state visible for the whole episode, and the
+  // overlay also clears instantly the moment the visitor returns (away.active
+  // flips false), which is exactly "disappears when the user comes back".
+  useEffect(() => {
+    if (away.active && dismissedEpisode !== away.since) {
+      const id = setTimeout(() => setDismissedEpisode(away.since), 2800);
+      return () => clearTimeout(id);
+    }
+  }, [away.active, away.since, dismissedEpisode]);
+
   // Refit repeatedly: the iframe gets its real size a beat after mount.
   useEffect(() => {
     window.addEventListener("resize", fit);
@@ -372,6 +385,16 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
           <strong>Gravação</strong>
           <span className="mono">{sessionId.slice(0, 8)}</span>
           {status && <span className="section-count">{status}</span>}
+          {/* Persistent state badge — always shows whether, at the current
+              playback moment, the visitor was active, backgrounded or gone. */}
+          {away.active ? (
+            <span className={`presence-badge ${away.state === "left" ? "bad" : "warn"}`}>
+              {away.state === "left" ? <LogOut size={13} /> : <EyeOff size={13} />}
+              {away.state === "left" ? "Havia saído" : "Segundo plano"}
+            </span>
+          ) : (
+            <span className="presence-badge active"><i className="dot" /> Ativo</span>
+          )}
           <button className="btn btn-ghost btn-sm spacer" onClick={onClose}>Fechar</button>
         </header>
         <div className="stage-wrap">
