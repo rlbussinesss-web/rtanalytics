@@ -110,6 +110,25 @@ export async function listReplays(siteId: string, filter: ReplayFilter = {}): Pr
   }));
 }
 
+/**
+ * Visibility transitions for a session (backgrounded / returned / left), as
+ * epoch-ms timestamps. The player maps these onto the recording timeline so a
+ * viewer can see and jump to the moments the visitor stepped away.
+ */
+export async function getSessionMarkers(
+  siteId: string,
+  sessionId: string
+): Promise<{ tMs: number; state: string }[]> {
+  const rows = await query<{ t: string; state: string }>(
+    `SELECT extract(epoch FROM time) * 1000 AS t, payload->>'state' AS state
+       FROM events
+      WHERE site_id = $1 AND session_id = $2 AND event_type = 'visibility'
+      ORDER BY time ASC`,
+    [siteId, sessionId]
+  );
+  return rows.map((r) => ({ tMs: Number(r.t), state: r.state }));
+}
+
 /** All frames for one session, flattened and ordered as recorded. */
 export async function getReplayFrames(siteId: string, sessionId: string): Promise<unknown[]> {
   const rows = await query<{ frames: unknown[] }>(

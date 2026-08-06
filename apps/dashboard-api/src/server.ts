@@ -12,7 +12,7 @@ import {
 import { extractToken, isValidToken } from "./auth.js";
 import { computeMetrics, type RangeKey } from "./metrics.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
-import { listReplays, getReplayFrames } from "./replays.js";
+import { listReplays, getReplayFrames, getSessionMarkers } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
 import { setSessionMeta, listTags } from "./session-meta.js";
 
@@ -108,7 +108,11 @@ app.post("/api/sites/:siteId/sessions/:sessionId/meta", async (req) => {
 
 app.get("/api/sites/:siteId/replays/:sessionId", async (req) => {
   const { siteId, sessionId } = req.params as { siteId: string; sessionId: string };
-  return { sessionId, frames: await getReplayFrames(siteId, sessionId) };
+  const [frames, markers] = await Promise.all([
+    getReplayFrames(siteId, sessionId),
+    getSessionMarkers(siteId, sessionId),
+  ]);
+  return { sessionId, frames, markers };
 });
 
 app.register(async (fastify) => {

@@ -550,7 +550,13 @@ body {
 .play-btn:hover { background: var(--accent-hover); }
 .play-btn:active { transform: scale(0.94); }
 .time-label { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 38px; text-align: center; }
+.scrubber-wrap { flex: 1; position: relative; display: flex; align-items: center; }
 .scrubber { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 4px; cursor: pointer; background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--surface-3) var(--pct, 0%)); }
+/* Visibility markers on the timeline: click to jump to that moment. */
+.tl-marker { position: absolute; top: 50%; width: 4px; height: 15px; transform: translate(-50%, -50%); border: none; border-radius: 2px; padding: 0; cursor: pointer; z-index: 2; box-shadow: 0 0 0 1.5px var(--surface-1); transition: transform 0.12s; }
+.tl-marker:hover { transform: translate(-50%, -50%) scaleY(1.35); }
+.tl-marker.hidden { background: var(--warning); }
+.tl-marker.left { background: var(--danger); }
 .scrubber::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); box-shadow: var(--shadow-sm); cursor: grab; }
 .scrubber::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
 .scrubber::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); cursor: grab; }

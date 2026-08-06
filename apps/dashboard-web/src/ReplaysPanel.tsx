@@ -174,9 +174,15 @@ interface ReplayerCtl {
   play: (offsetMs?: number) => void;
   pause: (offsetMs?: number) => void;
   getCurrentTime: () => number;
-  getMetaData: () => { totalTime: number };
+  getMetaData: () => { totalTime: number; startTime: number };
   setConfig: (c: { speed?: number }) => void;
   destroy?: () => void;
+}
+
+interface TimelineMarker {
+  offsetMs: number;
+  pct: number;
+  state: string;
 }
 
 const SPEEDS = [1, 2, 4, 8];
@@ -192,6 +198,7 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
   const [currentMs, setCurrentMs] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [markers, setMarkers] = useState<TimelineMarker[]>([]);
 
   // While playing, poll the replayer's clock to move the scrubber. rrweb
   // doesn't expose a reliable per-frame time event across versions, so a rAF
@@ -267,13 +274,26 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
           headers: { Authorization: `Bearer ${getToken() ?? ""}` },
         });
         if (!res.ok) { setStatus("não foi possível carregar"); return; }
-        const data = (await res.json()) as { frames: unknown[] };
+        const data = (await res.json()) as {
+          frames: unknown[];
+          markers?: { tMs: number; state: string }[];
+        };
         if (cancelled || !hostRef.current) return;
         if (data.frames.length < 2) { setStatus("gravação muito curta"); return; }
         replayer = new Replayer(data.frames as never[], { root: hostRef.current, skipInactive: true, mouseTail: { duration: 800 } });
         replayerRef.current = replayer as unknown as ReplayerCtl;
-        const total = (replayer as unknown as ReplayerCtl).getMetaData().totalTime;
+        const meta = (replayer as unknown as ReplayerCtl).getMetaData();
+        const total = meta.totalTime;
         setTotalMs(total);
+        // Map each visibility event onto the recording timeline. Only "hidden"
+        // and "left" are shown (the moments the visitor stepped away).
+        setMarkers(
+          (data.markers ?? [])
+            .filter((m) => m.state === "hidden" || m.state === "left")
+            .map((m) => ({ offsetMs: m.tMs - meta.startTime, state: m.state }))
+            .filter((m) => m.offsetMs >= 0 && total > 0 && m.offsetMs <= total)
+            .map((m) => ({ ...m, pct: (m.offsetMs / total) * 100 }))
+        );
         replayer.play();
         setPlaying(true);
         setStatus("");
@@ -334,18 +354,29 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
             {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
           </button>
           <span className="time-label">{fmtClock(currentMs)}</span>
-          <input
-            className="scrubber"
-            type="range"
-            min={0}
-            max={totalMs || 0}
-            step={50}
-            value={currentMs}
-            style={{ ["--pct" as string]: `${totalMs ? (currentMs / totalMs) * 100 : 0}%` }}
-            onPointerDown={() => { scrubbingRef.current = true; }}
-            onChange={(e) => seekTo(Number(e.target.value))}
-            onPointerUp={() => { scrubbingRef.current = false; }}
-          />
+          <div className="scrubber-wrap">
+            <input
+              className="scrubber"
+              type="range"
+              min={0}
+              max={totalMs || 0}
+              step={50}
+              value={currentMs}
+              style={{ ["--pct" as string]: `${totalMs ? (currentMs / totalMs) * 100 : 0}%` }}
+              onPointerDown={() => { scrubbingRef.current = true; }}
+              onChange={(e) => seekTo(Number(e.target.value))}
+              onPointerUp={() => { scrubbingRef.current = false; }}
+            />
+            {markers.map((m, i) => (
+              <button
+                key={i}
+                className={`tl-marker ${m.state === "left" ? "left" : "hidden"}`}
+                style={{ left: `${m.pct}%` }}
+                title={`${m.state === "left" ? "Saiu do site" : "Foi para segundo plano"} em ${fmtClock(m.offsetMs)}`}
+                onClick={() => seekTo(m.offsetMs)}
+              />
+            ))}
+          </div>
           <span className="time-label">{fmtClock(totalMs)}</span>
           <div className="speed-group">
             {SPEEDS.map((s) => (
