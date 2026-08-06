@@ -544,6 +544,20 @@ body {
 .stage iframe { background: #fff; border: none; box-shadow: var(--shadow); border-radius: 6px; }
 .spacer { margin-left: auto; }
 
+/* recorded player controls ---------------------------------------------- */
+.player-bar { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-top: 1px solid var(--border); background: var(--surface-1); flex-shrink: 0; }
+.play-btn { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--accent); color: #fff; cursor: pointer; display: grid; place-items: center; transition: background 0.15s, transform 0.06s; flex-shrink: 0; }
+.play-btn:hover { background: var(--accent-hover); }
+.play-btn:active { transform: scale(0.94); }
+.time-label { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; min-width: 38px; text-align: center; }
+.scrubber { flex: 1; -webkit-appearance: none; appearance: none; height: 6px; border-radius: 4px; cursor: pointer; background: linear-gradient(to right, var(--accent) var(--pct, 0%), var(--surface-3) var(--pct, 0%)); }
+.scrubber::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); box-shadow: var(--shadow-sm); cursor: grab; }
+.scrubber::-webkit-slider-thumb:active { cursor: grabbing; transform: scale(1.15); }
+.scrubber::-moz-range-thumb { width: 15px; height: 15px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); cursor: grab; }
+.speed-group { display: flex; gap: 2px; padding: 3px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--border); flex-shrink: 0; }
+.speed-btn { font: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 8px; border: none; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-variant-numeric: tabular-nums; }
+.speed-btn.is-active { background: var(--surface-3); color: var(--text); }
+
 /* mobile ----------------------------------------------------------------- */
 /* Hidden on desktop; the drawer + hamburger only exist on small screens. */
 .menu-btn { display: none; }

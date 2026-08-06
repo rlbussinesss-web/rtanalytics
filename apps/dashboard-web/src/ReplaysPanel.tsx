@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Replayer } from "rrweb";
 import "rrweb/dist/style.css";
-import { Bug, Flame, MousePointerClick, Plus, Star, X } from "lucide-react";
+import { Bug, Flame, MousePointerClick, Pause, Play, Plus, Star, X } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
 import { avatarFor, deviceLabel, flag, fmtDuration } from "./lib/ui";
 
@@ -169,10 +169,77 @@ function ReplayCard({
   );
 }
 
+// Minimal view of the rrweb Replayer methods this player drives.
+interface ReplayerCtl {
+  play: (offsetMs?: number) => void;
+  pause: (offsetMs?: number) => void;
+  getCurrentTime: () => number;
+  getMetaData: () => { totalTime: number };
+  setConfig: (c: { speed?: number }) => void;
+  destroy?: () => void;
+}
+
+const SPEEDS = [1, 2, 4, 8];
+
 function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessionId: string; onClose: () => void }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const replayerRef = useRef<ReplayerCtl | null>(null);
+  const rafRef = useRef<number>(0);
+  const scrubbingRef = useRef(false);
   const [status, setStatus] = useState("carregando gravação…");
+  const [playing, setPlaying] = useState(false);
+  const [currentMs, setCurrentMs] = useState(0);
+  const [totalMs, setTotalMs] = useState(0);
+  const [speed, setSpeed] = useState(1);
+
+  // While playing, poll the replayer's clock to move the scrubber. rrweb
+  // doesn't expose a reliable per-frame time event across versions, so a rAF
+  // poll of getCurrentTime() is the robust way to stay in sync.
+  const startTicking = useCallback(() => {
+    cancelAnimationFrame(rafRef.current);
+    const tick = () => {
+      const r = replayerRef.current;
+      if (r && !scrubbingRef.current) {
+        const t = Math.min(r.getCurrentTime(), totalMs || Infinity);
+        setCurrentMs(t);
+        if (totalMs && t >= totalMs) {
+          setPlaying(false);
+          return;
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    };
+    rafRef.current = requestAnimationFrame(tick);
+  }, [totalMs]);
+
+  const togglePlay = useCallback(() => {
+    const r = replayerRef.current;
+    if (!r) return;
+    if (playing) {
+      r.pause();
+      setPlaying(false);
+    } else {
+      // Restart from the beginning if we're at the end.
+      const from = totalMs && currentMs >= totalMs - 50 ? 0 : currentMs;
+      r.play(from);
+      setPlaying(true);
+      startTicking();
+    }
+  }, [playing, currentMs, totalMs, startTicking]);
+
+  const seekTo = useCallback((ms: number) => {
+    const r = replayerRef.current;
+    if (!r) return;
+    setCurrentMs(ms);
+    if (playing) r.play(ms);
+    else r.pause(ms);
+  }, [playing]);
+
+  const changeSpeed = useCallback((s: number) => {
+    setSpeed(s);
+    replayerRef.current?.setConfig({ speed: s });
+  }, []);
 
   const fit = useCallback(() => {
     const stage = stageRef.current;
@@ -204,15 +271,30 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
         if (cancelled || !hostRef.current) return;
         if (data.frames.length < 2) { setStatus("gravação muito curta"); return; }
         replayer = new Replayer(data.frames as never[], { root: hostRef.current, skipInactive: true, mouseTail: { duration: 800 } });
+        replayerRef.current = replayer as unknown as ReplayerCtl;
+        const total = (replayer as unknown as ReplayerCtl).getMetaData().totalTime;
+        setTotalMs(total);
         replayer.play();
+        setPlaying(true);
         setStatus("");
         requestAnimationFrame(fit);
       } catch {
         setStatus("erro ao carregar");
       }
     })();
-    return () => { cancelled = true; replayer?.destroy?.(); };
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(rafRef.current);
+      replayer?.destroy?.();
+      replayerRef.current = null;
+    };
   }, [siteId, sessionId, fit]);
+
+  // Kick off the scrubber clock once we know the total duration.
+  useEffect(() => {
+    if (totalMs > 0) startTicking();
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [totalMs, startTicking]);
 
   // Refit repeatedly: the iframe gets its real size a beat after mount.
   useEffect(() => {
@@ -224,11 +306,17 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
     };
   }, [fit]);
 
+  // Keyboard shortcuts: Esc closes, Space play/pause, ← / → skip 5s.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === " ") { e.preventDefault(); togglePlay(); }
+      else if (e.key === "ArrowLeft") seekTo(Math.max(0, currentMs - 5000));
+      else if (e.key === "ArrowRight") seekTo(Math.min(totalMs, currentMs + 5000));
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, togglePlay, seekTo, currentMs, totalMs]);
 
   return (
     <div className="backdrop" onClick={onClose}>
@@ -240,7 +328,41 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
           <button className="btn btn-ghost btn-sm spacer" onClick={onClose}>Fechar</button>
         </header>
         <div className="stage" ref={stageRef}><div ref={hostRef} /></div>
+
+        <div className="player-bar">
+          <button className="play-btn" onClick={togglePlay} title={playing ? "Pausar (espaço)" : "Reproduzir (espaço)"}>
+            {playing ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}
+          </button>
+          <span className="time-label">{fmtClock(currentMs)}</span>
+          <input
+            className="scrubber"
+            type="range"
+            min={0}
+            max={totalMs || 0}
+            step={50}
+            value={currentMs}
+            style={{ ["--pct" as string]: `${totalMs ? (currentMs / totalMs) * 100 : 0}%` }}
+            onPointerDown={() => { scrubbingRef.current = true; }}
+            onChange={(e) => seekTo(Number(e.target.value))}
+            onPointerUp={() => { scrubbingRef.current = false; }}
+          />
+          <span className="time-label">{fmtClock(totalMs)}</span>
+          <div className="speed-group">
+            {SPEEDS.map((s) => (
+              <button key={s} className={`speed-btn${s === speed ? " is-active" : ""}`} onClick={() => changeSpeed(s)}>
+                {s}×
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
+}
+
+function fmtClock(ms: number): string {
+  const total = Math.floor(ms / 1000);
+  const m = Math.floor(total / 60);
+  const s = total % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
 }
