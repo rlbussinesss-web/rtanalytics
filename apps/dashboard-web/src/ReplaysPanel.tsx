@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Replayer } from "rrweb";
 import "rrweb/dist/style.css";
-import { Bug, Flame, MousePointerClick, Pause, Play, Plus, Star, X } from "lucide-react";
+import { Bug, EyeOff, Flame, LogOut, MousePointerClick, Pause, Play, Plus, Star, X } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
 import { avatarFor, deviceLabel, flag, fmtDuration } from "./lib/ui";
 
@@ -198,7 +198,34 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
   const [currentMs, setCurrentMs] = useState(0);
   const [totalMs, setTotalMs] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const [markers, setMarkers] = useState<TimelineMarker[]>([]);
+  // Full visibility timeline (offset + state) so we can both draw ticks and,
+  // during playback, show an overlay while the visitor was away.
+  const [visEvents, setVisEvents] = useState<{ offsetMs: number; state: string }[]>([]);
+  const [dismissedEpisode, setDismissedEpisode] = useState<number | null>(null);
+
+  const markers = useMemo<TimelineMarker[]>(
+    () =>
+      totalMs
+        ? visEvents
+            .filter((v) => v.state === "hidden" || v.state === "left")
+            .map((v) => ({ ...v, pct: (v.offsetMs / totalMs) * 100 }))
+        : [],
+    [visEvents, totalMs]
+  );
+
+  // Which state is in effect at the current playback position, and when that
+  // episode began (used to key dismissals so a new away-episode re-shows).
+  const away = useMemo(() => {
+    let state = "visible";
+    let since = 0;
+    for (const v of visEvents) {
+      if (v.offsetMs <= currentMs) {
+        state = v.state;
+        since = v.offsetMs;
+      } else break;
+    }
+    return { active: state === "hidden" || state === "left", state, since };
+  }, [visEvents, currentMs]);
 
   // While playing, poll the replayer's clock to move the scrubber. rrweb
   // doesn't expose a reliable per-frame time event across versions, so a rAF
@@ -285,14 +312,14 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
         const meta = (replayer as unknown as ReplayerCtl).getMetaData();
         const total = meta.totalTime;
         setTotalMs(total);
-        // Map each visibility event onto the recording timeline. Only "hidden"
-        // and "left" are shown (the moments the visitor stepped away).
-        setMarkers(
+        // Full visibility timeline mapped onto the recording (offset = event
+        // epoch minus recording start). Kept complete (incl. "visible") so the
+        // overlay knows when the visitor came back.
+        setVisEvents(
           (data.markers ?? [])
-            .filter((m) => m.state === "hidden" || m.state === "left")
             .map((m) => ({ offsetMs: m.tMs - meta.startTime, state: m.state }))
             .filter((m) => m.offsetMs >= 0 && total > 0 && m.offsetMs <= total)
-            .map((m) => ({ ...m, pct: (m.offsetMs / total) * 100 }))
+            .sort((a, b) => a.offsetMs - b.offsetMs)
         );
         replayer.play();
         setPlaying(true);
@@ -347,7 +374,26 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
           {status && <span className="section-count">{status}</span>}
           <button className="btn btn-ghost btn-sm spacer" onClick={onClose}>Fechar</button>
         </header>
-        <div className="stage" ref={stageRef}><div ref={hostRef} /></div>
+        <div className="stage-wrap">
+          <div className="stage" ref={stageRef}><div ref={hostRef} /></div>
+          {away.active && dismissedEpisode !== away.since && (
+            <div className="presence-overlay">
+              <div className={`presence-card ${away.state === "left" ? "bad" : "warn"}`}>
+                <button className="presence-close" title="Fechar" onClick={() => setDismissedEpisode(away.since)}>
+                  <X size={15} />
+                </button>
+                <span className="presence-ico">
+                  {away.state === "left" ? <LogOut size={14} /> : <EyeOff size={14} />}
+                </span>
+                <b>{away.state === "left" ? "Visitante saiu do site" : "Aba em segundo plano"}</b>
+                <span>
+                  Neste ponto da gravação, o visitante{" "}
+                  {away.state === "left" ? "deixou o site." : "estava com a aba em segundo plano."}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className="player-bar">
           <button className="play-btn" onClick={togglePlay} title={playing ? "Pausar (espaço)" : "Reproduzir (espaço)"}>

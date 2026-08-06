@@ -539,6 +539,9 @@ body {
 /* Scroll vertically; the replay is fitted to width by JS and centered via the
  * host div's auto margins. Aligning to the top (not centering) is what keeps a
  * tall desktop page from being clipped. */
+/* Wrapper sized to the available space so the presence overlay covers the
+ * visible stage viewport, not the (taller) scrollable content. */
+.stage-wrap { position: relative; flex: 1; display: flex; min-height: 0; }
 .stage { flex: 1; overflow: auto; background: var(--surface-2); padding: 12px; }
 .stage .replayer-wrapper { transform-origin: top left; }
 .stage iframe { background: #fff; border: none; box-shadow: var(--shadow); border-radius: 6px; }
