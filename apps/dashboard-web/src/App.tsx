@@ -1,19 +1,25 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useLiveEvents } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
-import { clearToken, getToken, setToken, verifyToken } from "./token";
 import { useSessions } from "./useSessions";
 import { LiveScreen } from "./LiveScreen";
+import { clearToken, getToken, setToken, verifyToken } from "./token";
+import "./styles.css";
 
 const DEFAULT_SITE_ID = import.meta.env.VITE_SITE_ID ?? "demo-site";
 
 export function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
 
-  if (!authed) {
-    return <LoginScreen onSuccess={() => setAuthed(true)} />;
-  }
-  return <Dashboard onLogout={() => { clearToken(); setAuthed(false); }} />;
+  if (!authed) return <LoginScreen onSuccess={() => setAuthed(true)} />;
+  return (
+    <Dashboard
+      onLogout={() => {
+        clearToken();
+        setAuthed(false);
+      }}
+    />
+  );
 }
 
 function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
@@ -40,68 +46,106 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <div style={styles.loginPage}>
-      <form onSubmit={submit} style={styles.loginCard}>
-        <h1 style={styles.title}>RTAnalytics</h1>
+    <div className="login-page">
+      <form onSubmit={submit} className="card login-card">
+        <h1 className="login-title">RTAnalytics</h1>
+        <p className="login-sub">Monitoramento em tempo real</p>
         <input
+          className="input"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Senha do painel"
           autoFocus
-          style={styles.input}
         />
-        <button type="submit" disabled={checking || !password} style={styles.button}>
+        <button type="submit" className="btn btn-primary" disabled={checking || !password}>
           {checking ? "Verificando…" : "Entrar"}
         </button>
-        {error && <p style={styles.error}>{error}</p>}
+        {error && <p className="error">{error}</p>}
       </form>
     </div>
   );
 }
 
 function Dashboard({ onLogout }: { onLogout: () => void }) {
-  const [siteId] = useState(DEFAULT_SITE_ID);
+  const siteId = DEFAULT_SITE_ID;
   const { events, connected } = useLiveEvents(siteId);
   const onlineCount = useOnlineCount(siteId, events);
   const sessions = useSessions(siteId, events);
   const [watching, setWatching] = useState<string | null>(null);
 
-  const pathBySession = new Map<string, string>();
-  for (const event of events) {
-    if (!pathBySession.has(event.sessionId)) pathBySession.set(event.sessionId, event.path);
-  }
+  // Most recent path per session, so the visitor list shows where each one is.
+  const pathBySession = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const event of events) {
+      if (!map.has(event.sessionId)) map.set(event.sessionId, event.path);
+    }
+    return map;
+  }, [events]);
+
+  const eventsPerMinute = useMemo(() => {
+    const cutoff = Date.now() - 60_000;
+    return events.filter((e) => e.timestamp >= cutoff).length;
+  }, [events]);
 
   return (
-    <div style={styles.page}>
-      <header style={styles.header}>
-        <h1 style={styles.title}>RTAnalytics — {siteId}</h1>
-        <span style={{ ...styles.badge, background: connected ? "#16a34a" : "#dc2626" }}>
-          {connected ? "live" : "reconnecting…"}
+    <div className="page">
+      <header className="topbar">
+        <h1 className="brand">
+          RTAnalytics <span>/ {siteId}</span>
+        </h1>
+        <span className={`pill${connected ? "" : " is-offline"}`}>
+          <i className="dot" />
+          {connected ? "ao vivo" : "reconectando"}
         </span>
-        <button onClick={onLogout} style={styles.logout}>
-          sair
+        <button className="btn btn-ghost btn-sm spacer" onClick={onLogout}>
+          Sair
         </button>
       </header>
 
-      <section style={styles.counterCard}>
-        <div style={styles.counterValue}>{onlineCount}</div>
-        <div style={styles.counterLabel}>visitantes online agora</div>
+      <div className="grid">
+        <Stat value={onlineCount} label="visitantes online" />
+        <Stat value={sessions.length} label="sessões ativas" />
+        <Stat value={eventsPerMinute} label="eventos no último minuto" />
+      </div>
+
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">Visitantes agora</h2>
+          <span className="section-count">{sessions.length}</span>
+        </div>
+        <ul className="list">
+          {sessions.length === 0 && <li className="empty">Nenhum visitante online.</li>}
+          {sessions.map((sessionId) => (
+            <li key={sessionId} className="row session-row">
+              <span className="mono">{sessionId.slice(0, 8)}</span>
+              <span className="path">{pathBySession.get(sessionId) ?? "—"}</span>
+              <button
+                className="btn btn-primary btn-sm"
+                onClick={() => setWatching(sessionId)}
+              >
+                Assistir ao vivo
+              </button>
+            </li>
+          ))}
+        </ul>
       </section>
 
-      <section style={{ marginBottom: 24 }}>
-        <h2 style={styles.sectionTitle}>Visitantes agora</h2>
-        <ul style={styles.eventList}>
-          {sessions.length === 0 && (
-            <li style={styles.emptyState}>Nenhum visitante online.</li>
-          )}
-          {sessions.map((sessionId) => (
-            <li key={sessionId} style={styles.sessionRow}>
-              <span style={styles.eventSession}>{sessionId.slice(0, 8)}</span>
-              <span style={styles.eventPath}>{pathBySession.get(sessionId) ?? "—"}</span>
-              <button onClick={() => setWatching(sessionId)} style={styles.watchButton}>
-                assistir ao vivo
-              </button>
+      <section className="section">
+        <div className="section-head">
+          <h2 className="section-title">Eventos ao vivo</h2>
+          <span className="section-count">{events.length}</span>
+        </div>
+        <ul className="list is-scrollable">
+          {events.length === 0 && <li className="empty">Aguardando eventos…</li>}
+          {events.map((event) => (
+            <li key={event.eventId} className="row event-row">
+              <span className={`tag${event.eventType === "pageview" ? " is-pageview" : ""}`}>
+                {event.eventType}
+              </span>
+              <span className="path">{event.path}</span>
+              <span className="mono">{event.sessionId.slice(0, 8)}</span>
+              <span className="time">{new Date(event.timestamp).toLocaleTimeString()}</span>
             </li>
           ))}
         </ul>
@@ -114,114 +158,15 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           onClose={() => setWatching(null)}
         />
       )}
-
-      <section>
-        <h2 style={styles.sectionTitle}>Eventos ao vivo</h2>
-        <ul style={styles.eventList}>
-          {events.length === 0 && <li style={styles.emptyState}>Aguardando eventos…</li>}
-          {events.map((event) => (
-            <li key={event.eventId} style={styles.eventRow}>
-              <span style={styles.eventType}>{event.eventType}</span>
-              <span style={styles.eventPath}>{event.path}</span>
-              <span style={styles.eventSession}>{event.sessionId.slice(0, 8)}</span>
-              <span style={styles.eventTime}>
-                {new Date(event.timestamp).toLocaleTimeString()}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </section>
     </div>
   );
 }
 
-const styles: Record<string, React.CSSProperties> = {
-  page: {
-    fontFamily: "system-ui, sans-serif",
-    maxWidth: 720,
-    margin: "0 auto",
-    padding: "24px 16px",
-    color: "#1a1a1a",
-  },
-  header: { display: "flex", alignItems: "center", gap: 12, marginBottom: 24 },
-  loginPage: {
-    fontFamily: "system-ui, sans-serif",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: "100vh",
-  },
-  loginCard: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-    width: 280,
-    padding: 24,
-    border: "1px solid #e5e5e5",
-    borderRadius: 12,
-  },
-  input: { padding: "10px 12px", border: "1px solid #ddd", borderRadius: 8, fontSize: 14 },
-  button: {
-    padding: "10px 12px",
-    border: "none",
-    borderRadius: 8,
-    background: "#1a1a1a",
-    color: "white",
-    fontSize: 14,
-    cursor: "pointer",
-  },
-  error: { color: "#dc2626", fontSize: 13, margin: 0 },
-  logout: {
-    marginLeft: "auto",
-    border: "1px solid #ddd",
-    background: "transparent",
-    borderRadius: 8,
-    padding: "4px 10px",
-    fontSize: 12,
-    cursor: "pointer",
-  },
-  title: { fontSize: 20, margin: 0 },
-  badge: { color: "white", padding: "2px 10px", borderRadius: 999, fontSize: 12 },
-  counterCard: {
-    border: "1px solid #e5e5e5",
-    borderRadius: 12,
-    padding: 24,
-    textAlign: "center",
-    marginBottom: 24,
-  },
-  counterValue: { fontSize: 48, fontWeight: 700 },
-  counterLabel: { color: "#666" },
-  sectionTitle: { fontSize: 16, marginBottom: 8 },
-  eventList: { listStyle: "none", margin: 0, padding: 0, maxHeight: 480, overflowY: "auto" },
-  eventRow: {
-    display: "grid",
-    gridTemplateColumns: "100px 1fr 90px 90px",
-    gap: 8,
-    padding: "8px 4px",
-    borderBottom: "1px solid #f0f0f0",
-    fontSize: 13,
-  },
-  eventType: { fontWeight: 600 },
-  eventPath: { color: "#333", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
-  eventSession: { color: "#888", fontFamily: "monospace" },
-  eventTime: { color: "#888", textAlign: "right" },
-  emptyState: { color: "#888", padding: "12px 4px" },
-  sessionRow: {
-    display: "grid",
-    gridTemplateColumns: "90px 1fr auto",
-    gap: 8,
-    alignItems: "center",
-    padding: "8px 4px",
-    borderBottom: "1px solid #f0f0f0",
-    fontSize: 13,
-  },
-  watchButton: {
-    border: "none",
-    background: "#1a1a1a",
-    color: "white",
-    borderRadius: 8,
-    padding: "6px 12px",
-    fontSize: 12,
-    cursor: "pointer",
-  },
-};
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <div className="card stat">
+      <div className="stat-value">{value}</div>
+      <div className="stat-label">{label}</div>
+    </div>
+  );
+}

@@ -61,6 +61,16 @@ export class Recorder {
   private buffer: unknown[] = [];
   private timer: ReturnType<typeof setInterval> | null = null;
   private seq = 0;
+  /**
+   * Set synchronously before the first `await` in start().
+   *
+   * The watcher re-sends "start-recording" on a timer, and more than one
+   * viewer can watch the same session. Without a synchronous guard, two calls
+   * both observe `stopFn === null` while the script is still loading, both
+   * call rrweb.record(), and the second one leaves the recorder in a state
+   * where nothing is emitted.
+   */
+  private starting = false;
 
   constructor(
     private readonly scriptUrl: string,
@@ -72,14 +82,22 @@ export class Recorder {
   }
 
   async start(): Promise<void> {
-    if (this.isRecording) return;
+    if (this.isRecording || this.starting) return;
+    this.starting = true;
 
+    try {
+      await this.startInternal();
+    } finally {
+      this.starting = false;
+    }
+  }
+
+  private async startInternal(): Promise<void> {
     await loadRrweb(this.scriptUrl);
     const rrweb = window.rrweb;
     if (!rrweb) throw new Error("recorder loaded but window.rrweb is missing");
 
-    this.stopFn =
-      rrweb.record({
+    const stop = rrweb.record({
         emit: (event) => {
           this.buffer.push(event);
           // Hard cap protects memory if the connection stalls mid-burst.
@@ -98,8 +116,17 @@ export class Recorder {
         // Throttle the two highest-frequency signals; 50ms of mouse resolution
         // is imperceptible on playback but cuts frame volume dramatically.
         sampling: { mousemove: 50, scroll: 100, input: "last" },
-      }) ?? null;
+      });
 
+    // rrweb returns undefined if it refused to start. Treating that as
+    // "recording" would leave a viewer staring at an empty player forever, so
+    // surface it instead.
+    if (typeof stop !== "function") {
+      throw new Error("rrweb.record() did not start");
+    }
+
+    this.stopFn = stop;
+    if (this.timer) clearInterval(this.timer);
     this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
   }
 

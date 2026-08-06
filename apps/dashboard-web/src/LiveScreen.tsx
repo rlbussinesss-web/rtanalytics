@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Replayer } from "rrweb";
 // Without rrweb's stylesheet the replayer's iframe has no dimensions and the
 // stage renders blank even though frames are arriving.
@@ -37,11 +37,34 @@ export function LiveScreen({
   sessionId: string;
   onClose: () => void;
 }) {
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const replayerRef = useRef<Replayer | null>(null);
   const pendingRef = useRef<RrwebFrame[]>([]);
   const [status, setStatus] = useState("conectando…");
+  const [live, setLive] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
+
+  /**
+   * The visitor's viewport is usually wider than this panel, so the replay is
+   * scaled down to fit rather than shown behind scrollbars — the point is to
+   * see their whole screen at a glance.
+   */
+  const fitToStage = useCallback(() => {
+    const stage = stageRef.current;
+    const wrapper = hostRef.current?.querySelector<HTMLElement>(".replayer-wrapper");
+    const iframe = hostRef.current?.querySelector("iframe");
+    if (!stage || !wrapper || !iframe) return;
+
+    const w = iframe.offsetWidth;
+    const h = iframe.offsetHeight;
+    if (!w || !h) return;
+
+    const scale = Math.min((stage.clientWidth - 32) / w, (stage.clientHeight - 32) / h, 1);
+    wrapper.style.transform = `scale(${scale})`;
+    wrapper.style.width = `${w}px`;
+    wrapper.style.height = `${h}px`;
+  }, []);
 
   useEffect(() => {
     const token = encodeURIComponent(getToken() ?? "");
@@ -49,7 +72,7 @@ export function LiveScreen({
       `${WS_BASE_URL}/watch/${siteId}/${sessionId}?token=${token}`
     );
 
-    ws.onopen = () => setStatus("aguardando o visitante começar a transmitir…");
+    ws.onopen = () => setStatus("aguardando a transmissão…");
 
     ws.onmessage = (msg) => {
       let chunk: ReplayChunk;
@@ -93,6 +116,9 @@ export function LiveScreen({
         replayer.startLive(usable[0]!.timestamp);
         replayerRef.current = replayer;
         setStatus("ao vivo");
+        setLive(true);
+        // Let the replayer lay out its iframe before measuring it.
+        requestAnimationFrame(fitToStage);
         return;
       }
 
@@ -101,8 +127,14 @@ export function LiveScreen({
       }
     };
 
-    ws.onclose = () => setStatus("transmissão encerrada");
-    ws.onerror = () => setStatus("erro na conexão");
+    ws.onclose = () => {
+      setStatus("transmissão encerrada");
+      setLive(false);
+    };
+    ws.onerror = () => {
+      setStatus("erro na conexão");
+      setLive(false);
+    };
 
     return () => {
       ws.close();
@@ -110,62 +142,42 @@ export function LiveScreen({
       replayerRef.current = null;
       pendingRef.current = [];
     };
-  }, [siteId, sessionId]);
+  }, [siteId, sessionId, fitToStage]);
+
+  // Keep the replay fitted when the window (and therefore the stage) resizes.
+  useEffect(() => {
+    window.addEventListener("resize", fitToStage);
+    return () => window.removeEventListener("resize", fitToStage);
+  }, [fitToStage]);
+
+  // Escape closes the viewer, which also stops the visitor's recording.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   return (
-    <div style={styles.backdrop} onClick={onClose}>
-      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
-        <header style={styles.header}>
-          <strong>Sessão {sessionId.slice(0, 8)}</strong>
-          <span style={styles.status}>{status}</span>
-          <span style={styles.counter}>{frameCount} quadros</span>
-          <button onClick={onClose} style={styles.close}>
-            fechar
+    <div className="backdrop" onClick={onClose}>
+      <div className="viewer" onClick={(e) => e.stopPropagation()}>
+        <header className="viewer-head">
+          <strong>Sessão</strong>
+          <span className="mono">{sessionId.slice(0, 8)}</span>
+          <span className={`pill${live ? "" : " is-offline"}`}>
+            <i className="dot" />
+            {status}
+          </span>
+          <span className="section-count spacer">{frameCount} quadros</span>
+          <button className="btn btn-ghost btn-sm" onClick={onClose}>
+            Fechar
           </button>
         </header>
-        <div ref={hostRef} style={styles.stage} />
+        <div className="stage" ref={stageRef}>
+          <div ref={hostRef} />
+        </div>
       </div>
     </div>
   );
 }
-
-const styles: Record<string, React.CSSProperties> = {
-  backdrop: {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(0,0,0,0.6)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 100,
-  },
-  modal: {
-    background: "white",
-    borderRadius: 12,
-    width: "min(1200px, 95vw)",
-    height: "min(800px, 90vh)",
-    display: "flex",
-    flexDirection: "column",
-    overflow: "hidden",
-  },
-  header: {
-    display: "flex",
-    alignItems: "center",
-    gap: 12,
-    padding: "10px 16px",
-    borderBottom: "1px solid #eee",
-    fontSize: 13,
-  },
-  status: { color: "#16a34a" },
-  counter: { color: "#888", marginLeft: "auto" },
-  close: {
-    border: "1px solid #ddd",
-    background: "transparent",
-    borderRadius: 8,
-    padding: "4px 10px",
-    cursor: "pointer",
-  },
-  // The replayed page is rendered at its own viewport size inside an iframe,
-  // so it needs to scroll rather than stretch the modal.
-  stage: { flex: 1, overflow: "auto", background: "#fafafa" },
-};
