@@ -1,78 +1,87 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Replayer } from "rrweb";
 import "rrweb/dist/style.css";
+import { Bug, Flame, MousePointerClick, Plus, Star, X } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
-
-/**
- * Recorded session playback.
- *
- * Recordings exist only for sessions that were watched live at some point, so
- * this lists what's available and plays it back with rrweb's Replayer in
- * normal (non-live) mode, with rrweb's own controls.
- */
+import { avatarFor, deviceLabel, flag, fmtDuration } from "./lib/ui";
 
 interface ReplaySummary {
   sessionId: string;
   chunks: number;
   startedAt: string;
   endedAt: string;
+  durationSec: number;
+  pages: number;
+  clicks: number;
+  rageClicks: number;
+  errors: number;
+  country: string | null;
+  device: string | null;
+  browser: string | null;
+  entryPath: string | null;
+  favorite: boolean;
+  tags: string[];
 }
 
 export function ReplaysPanel({ siteId }: { siteId: string }) {
   const [replays, setReplays] = useState<ReplaySummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState<string | null>(null);
+  const [favOnly, setFavOnly] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(
+        `${API_BASE_URL}/api/sites/${siteId}/replays${favOnly ? "?favorites=true" : ""}`,
+        { headers: { Authorization: `Bearer ${getToken() ?? ""}` } }
+      );
+      if (res.ok) setReplays((await res.json()).replays as ReplaySummary[]);
+    } finally {
+      setLoading(false);
+    }
+  }, [siteId, favOnly]);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await fetch(`${API_BASE_URL}/api/sites/${siteId}/replays`, {
-          headers: { Authorization: `Bearer ${getToken() ?? ""}` },
-        });
-        if (res.ok && !cancelled) {
-          const data = (await res.json()) as { replays: ReplaySummary[] };
-          setReplays(data.replays);
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [siteId]);
+    void load();
+  }, [load]);
+
+  const patchMeta = useCallback(
+    async (sessionId: string, patch: { favorite?: boolean; tags?: string[] }) => {
+      // Optimistic update.
+      setReplays((prev) => prev.map((r) => (r.sessionId === sessionId ? { ...r, ...patch } : r)));
+      await fetch(`${API_BASE_URL}/api/sites/${siteId}/sessions/${sessionId}/meta`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${getToken() ?? ""}` },
+        body: JSON.stringify(patch),
+      }).catch(() => undefined);
+    },
+    [siteId]
+  );
 
   return (
-    <section className="section">
-      <div className="section-head">
-        <h2 className="section-title">Sessões gravadas</h2>
-        <span className="section-count">{replays.length}</span>
+    <section>
+      <div className="segment" style={{ marginBottom: 16 }}>
+        <button className={!favOnly ? "is-active" : ""} onClick={() => setFavOnly(false)}>Todas</button>
+        <button className={favOnly ? "is-active" : ""} onClick={() => setFavOnly(true)}>
+          <Star size={13} /> Favoritas
+        </button>
       </div>
+
       {loading && <p className="empty">Carregando…</p>}
       {!loading && replays.length === 0 && (
-        <p className="empty">
-          Nenhuma gravação ainda. Assista uma sessão ao vivo — ela fica gravada
-          para rever aqui depois.
-        </p>
+        <div className="card empty-rich">
+          <span className="ico"><MousePointerClick size={20} /></span>
+          <b>Nenhuma gravação {favOnly ? "favorita" : "ainda"}</b>
+          <p>Assista uma sessão ao vivo — ela fica gravada para rever aqui depois.</p>
+        </div>
       )}
-      <ul className="list">
+
+      <div className="replay-grid">
         {replays.map((r) => (
-          <li key={r.sessionId} className="row session-row">
-            <span className="mono">{r.sessionId.slice(0, 8)}</span>
-            <div className="session-meta">
-              <span className="path">
-                {new Date(r.startedAt).toLocaleString()} ·{" "}
-                {durationLabel(r.startedAt, r.endedAt)}
-              </span>
-              <span className="meta-line">{r.chunks} trechos gravados</span>
-            </div>
-            <button className="btn btn-primary btn-sm" onClick={() => setPlaying(r.sessionId)}>
-              Reproduzir
-            </button>
-          </li>
+          <ReplayCard key={r.sessionId} r={r} onPlay={() => setPlaying(r.sessionId)} onPatch={patchMeta} />
         ))}
-      </ul>
+      </div>
 
       {playing && (
         <RecordedPlayer siteId={siteId} sessionId={playing} onClose={() => setPlaying(null)} />
@@ -81,15 +90,86 @@ export function ReplaysPanel({ siteId }: { siteId: string }) {
   );
 }
 
-function RecordedPlayer({
-  siteId,
-  sessionId,
-  onClose,
+function ReplayCard({
+  r,
+  onPlay,
+  onPatch,
 }: {
-  siteId: string;
-  sessionId: string;
-  onClose: () => void;
+  r: ReplaySummary;
+  onPlay: () => void;
+  onPatch: (id: string, patch: { favorite?: boolean; tags?: string[] }) => void;
 }) {
+  const av = avatarFor(r.sessionId);
+  const [adding, setAdding] = useState(false);
+  const [tagInput, setTagInput] = useState("");
+
+  const addTag = () => {
+    const t = tagInput.trim();
+    if (t && !r.tags.includes(t)) onPatch(r.sessionId, { tags: [...r.tags, t] });
+    setTagInput("");
+    setAdding(false);
+  };
+
+  return (
+    <div className="card replay-card">
+      <div className="vc-top">
+        <span className="avatar" style={{ background: av.color }}>{av.initials}</span>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div className="vc-id">Sessão {r.sessionId.slice(0, 6)}</div>
+          <div className="vc-loc">{[flag(r.country ?? undefined), r.country, r.browser].filter(Boolean).join(" · ") || "—"}</div>
+        </div>
+        <button
+          className={`star-btn${r.favorite ? " is-fav" : ""}`}
+          title="Favoritar"
+          onClick={() => onPatch(r.sessionId, { favorite: !r.favorite })}
+        >
+          <Star size={16} fill={r.favorite ? "currentColor" : "none"} />
+        </button>
+      </div>
+
+      <div className="replay-stats">
+        <div><b>{fmtDuration(r.durationSec)}</b><span>duração</span></div>
+        <div><b>{r.pages}</b><span>páginas</span></div>
+        <div><b>{r.clicks}</b><span>cliques</span></div>
+        <div><b>{deviceLabel(r.device ?? undefined)}</b><span>dispositivo</span></div>
+      </div>
+
+      <div className="vc-meta">
+        {r.rageClicks > 0 && <span className="chip chip-warn"><Flame />{r.rageClicks} rage</span>}
+        {r.errors > 0 && <span className="chip chip-bad"><Bug />{r.errors} erro(s)</span>}
+        {r.entryPath && <span className="chip">{r.entryPath}</span>}
+      </div>
+
+      <div className="tag-row">
+        {r.tags.map((t) => (
+          <span key={t} className="tag-chip">
+            {t}
+            <button onClick={() => onPatch(r.sessionId, { tags: r.tags.filter((x) => x !== t) })}><X size={11} /></button>
+          </span>
+        ))}
+        {adding ? (
+          <input
+            className="tag-input"
+            autoFocus
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && addTag()}
+            onBlur={addTag}
+            placeholder="tag…"
+          />
+        ) : (
+          <button className="tag-add" onClick={() => setAdding(true)}><Plus size={12} /> tag</button>
+        )}
+      </div>
+
+      <button className="btn btn-primary btn-sm" style={{ justifyContent: "center" }} onClick={onPlay}>
+        Reproduzir
+      </button>
+    </div>
+  );
+}
+
+function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessionId: string; onClose: () => void }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState("carregando gravação…");
@@ -99,8 +179,7 @@ function RecordedPlayer({
     const wrapper = hostRef.current?.querySelector<HTMLElement>(".replayer-wrapper");
     const iframe = hostRef.current?.querySelector("iframe");
     if (!stage || !wrapper || !iframe) return;
-    const w = iframe.offsetWidth;
-    const h = iframe.offsetHeight;
+    const w = iframe.offsetWidth, h = iframe.offsetHeight;
     if (!w || !h) return;
     const scale = Math.min((stage.clientWidth - 32) / w, (stage.clientHeight - 32) / h, 1);
     wrapper.style.transform = `scale(${scale})`;
@@ -111,28 +190,16 @@ function RecordedPlayer({
   useEffect(() => {
     let replayer: Replayer | null = null;
     let cancelled = false;
-
     (async () => {
       try {
-        const res = await fetch(
-          `${API_BASE_URL}/api/sites/${siteId}/replays/${sessionId}`,
-          { headers: { Authorization: `Bearer ${getToken() ?? ""}` } }
-        );
-        if (!res.ok) {
-          setStatus("não foi possível carregar");
-          return;
-        }
+        const res = await fetch(`${API_BASE_URL}/api/sites/${siteId}/replays/${sessionId}`, {
+          headers: { Authorization: `Bearer ${getToken() ?? ""}` },
+        });
+        if (!res.ok) { setStatus("não foi possível carregar"); return; }
         const data = (await res.json()) as { frames: unknown[] };
         if (cancelled || !hostRef.current) return;
-        if (data.frames.length < 2) {
-          setStatus("gravação muito curta para reproduzir");
-          return;
-        }
-        replayer = new Replayer(data.frames as never[], {
-          root: hostRef.current,
-          skipInactive: true,
-          mouseTail: { duration: 800 },
-        });
+        if (data.frames.length < 2) { setStatus("gravação muito curta"); return; }
+        replayer = new Replayer(data.frames as never[], { root: hostRef.current, skipInactive: true, mouseTail: { duration: 800 } });
         replayer.play();
         setStatus("");
         requestAnimationFrame(fit);
@@ -140,11 +207,7 @@ function RecordedPlayer({
         setStatus("erro ao carregar");
       }
     })();
-
-    return () => {
-      cancelled = true;
-      replayer?.destroy?.();
-    };
+    return () => { cancelled = true; replayer?.destroy?.(); };
   }, [siteId, sessionId, fit]);
 
   useEffect(() => {
@@ -160,20 +223,10 @@ function RecordedPlayer({
           <strong>Gravação</strong>
           <span className="mono">{sessionId.slice(0, 8)}</span>
           {status && <span className="section-count">{status}</span>}
-          <button className="btn btn-ghost btn-sm spacer" onClick={onClose}>
-            Fechar
-          </button>
+          <button className="btn btn-ghost btn-sm spacer" onClick={onClose}>Fechar</button>
         </header>
-        <div className="stage" ref={stageRef}>
-          <div ref={hostRef} />
-        </div>
+        <div className="stage" ref={stageRef}><div ref={hostRef} /></div>
       </div>
     </div>
   );
-}
-
-function durationLabel(start: string, end: string): string {
-  const sec = Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000));
-  if (sec < 60) return `${sec}s`;
-  return `${Math.floor(sec / 60)}m ${sec % 60}s`;
 }

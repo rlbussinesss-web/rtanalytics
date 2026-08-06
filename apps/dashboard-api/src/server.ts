@@ -14,6 +14,7 @@ import { computeMetrics, type RangeKey } from "./metrics.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
+import { setSessionMeta, listTags } from "./session-meta.js";
 
 const PORT = Number(process.env.DASHBOARD_API_PORT ?? process.env.PORT ?? 8082);
 
@@ -84,7 +85,25 @@ app.get("/api/sites/:siteId/heatmap", async (req) => {
 
 app.get("/api/sites/:siteId/replays", async (req) => {
   const { siteId } = req.params as { siteId: string };
-  return { siteId, replays: await listReplays(siteId) };
+  const q = req.query as { favorites?: string; device?: string; tag?: string };
+  return {
+    siteId,
+    replays: await listReplays(siteId, {
+      favoritesOnly: q.favorites === "true",
+      device: q.device,
+      tag: q.tag,
+    }),
+    tags: await listTags(siteId),
+  };
+});
+
+app.post("/api/sites/:siteId/sessions/:sessionId/meta", async (req) => {
+  const { siteId, sessionId } = req.params as { siteId: string; sessionId: string };
+  const body = req.body as { favorite?: boolean; tags?: string[] };
+  const tags = Array.isArray(body.tags)
+    ? body.tags.map((t) => String(t).trim().slice(0, 40)).filter(Boolean).slice(0, 20)
+    : undefined;
+  return setSessionMeta(siteId, sessionId, { favorite: body.favorite, tags });
 });
 
 app.get("/api/sites/:siteId/replays/:sessionId", async (req) => {

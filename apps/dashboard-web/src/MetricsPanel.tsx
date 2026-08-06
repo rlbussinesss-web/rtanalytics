@@ -1,10 +1,11 @@
-import { BarChart3, Clock, Files, LogOut, MousePointerClick, Target, TrendingDown, UserPlus, Users } from "lucide-react";
+import { BarChart3, Clock, Download, Files, LogOut, MousePointerClick, Target, TrendingDown, UserPlus, Users } from "lucide-react";
 import { useMetrics, type Metrics, type RangeKey, type TopItem } from "./useMetrics";
 import { StatCard } from "./components/StatCard";
 import { AreaChart } from "./components/AreaChart";
 import { Donut } from "./components/Donut";
 import { InsightsPanel } from "./components/InsightsPanel";
 import { flag, fmtDuration, deviceLabel } from "./lib/ui";
+import { downloadCsv } from "./lib/export";
 
 const RANGES: [RangeKey, string][] = [["24h", "24 horas"], ["7d", "7 dias"], ["30d", "30 dias"]];
 
@@ -21,12 +22,19 @@ export function MetricsPanel({
 
   return (
     <div>
-      <div className="segment" style={{ marginBottom: 18 }}>
-        {RANGES.map(([k, label]) => (
-          <button key={k} className={k === range ? "is-active" : ""} onClick={() => onRangeChange(k)}>
-            {label}
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 18 }}>
+        <div className="segment">
+          {RANGES.map(([k, label]) => (
+            <button key={k} className={k === range ? "is-active" : ""} onClick={() => onRangeChange(k)}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {metrics && (
+          <button className="btn btn-ghost btn-sm spacer" onClick={() => exportMetrics(metrics)}>
+            <Download size={14} /> Exportar CSV
           </button>
-        ))}
+        )}
       </div>
 
       {!metrics && loading && <SkeletonMetrics />}
@@ -126,6 +134,34 @@ function TopList({ title, items, format }: { title: string; items: TopItem[]; fo
       ))}
     </div>
   );
+}
+
+function exportMetrics(m: Metrics) {
+  const rows: (string | number)[][] = [
+    ["Métrica", "Valor"],
+    ["Período", m.range],
+    ["Visitantes únicos", m.visitors],
+    ["Sessões", m.sessions],
+    ["Pageviews", m.pageviews],
+    ["Páginas por sessão", m.pagesPerSession.toFixed(2)],
+    ["Tempo médio (s)", m.avgSessionSec],
+    ["Taxa de rejeição", `${Math.round(m.bounceRate * 100)}%`],
+    ["Conversões", m.conversions],
+    ["Taxa de conversão", `${(m.conversionRate * 100).toFixed(1)}%`],
+    ["Novos visitantes", m.newVisitors],
+    ["Visitantes recorrentes", m.returningVisitors],
+    ["Rage clicks", `${(m.rageClickRate * 100).toFixed(1)}%`],
+    ["Dead clicks", `${(m.deadClickRate * 100).toFixed(1)}%`],
+    ["Erros de JS", m.errorCount],
+    ["Score de desempenho", m.performanceScore],
+    ["", ""],
+    ["Top páginas", "Views"],
+    ...m.topPages.map((p) => [p.label, p.count] as (string | number)[]),
+    ["", ""],
+    ["Top países", "Sessões"],
+    ...m.topCountries.map((c) => [c.label, c.count] as (string | number)[]),
+  ];
+  downloadCsv(`rtanalytics-${m.range}.csv`, rows);
 }
 
 function SkeletonMetrics() {

@@ -1,19 +1,21 @@
-import { Bell, Search } from "lucide-react";
+import { Search } from "lucide-react";
+import type { ReactNode } from "react";
 
 /**
  * Application header: contextual title/breadcrumb, a global-search affordance
- * (⌘K styling — a stub for now), the live-connection indicator and quick
- * actions. Sticky, with a translucent blurred background so content scrolls
- * under it.
+ * (⌘K styling — a stub for now), the live-connection indicator and a slot for
+ * quick actions (the alerts bell). Sticky, translucent blurred background.
  */
 export function Topbar({
   title,
   siteId,
   connected,
+  actions,
 }: {
   title: string;
   siteId: string;
   connected: boolean;
+  actions?: ReactNode;
 }) {
   return (
     <header className="topbar">
@@ -33,10 +35,7 @@ export function Topbar({
         {connected ? "Tempo real" : "Reconectando"}
       </span>
 
-      <button className="icon-btn" title="Notificações">
-        <Bell size={16} />
-        <span className="badge-dot" />
-      </button>
+      {actions}
     </header>
   );
 }

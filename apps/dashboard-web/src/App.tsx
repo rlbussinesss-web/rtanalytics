@@ -14,6 +14,8 @@ import { Sidebar, type ViewKey } from "./components/Sidebar";
 import { Topbar } from "./components/Topbar";
 import { StatCard } from "./components/StatCard";
 import { VisitorCard } from "./components/VisitorCard";
+import { AlertsBell, AlertToasts } from "./components/AlertsCenter";
+import { useAlerts } from "./useAlerts";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
 import "./styles.css";
 
@@ -110,6 +112,7 @@ function Dashboard({
   const [watching, setWatching] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>("overview");
   const [range, setRange] = useState<RangeKey>("24h");
+  const alerts = useAlerts(events, onlineCount);
 
   const infoBySession = useMemo(() => {
     const map = new Map<string, LiveEvent>();
@@ -138,7 +141,20 @@ function Dashboard({
         onLogout={onLogout}
       />
       <div className="main">
-        <Topbar title={VIEW_TITLES[view]} siteId={siteId} connected={connected} />
+        <Topbar
+          title={VIEW_TITLES[view]}
+          siteId={siteId}
+          connected={connected}
+          actions={
+            <AlertsBell
+              fired={alerts.fired}
+              rules={alerts.rules}
+              onToggleRule={alerts.toggleRule}
+              onRequestPermission={alerts.requestPermission}
+              onDismiss={alerts.dismiss}
+            />
+          }
+        />
         <div className="content">
           <div className="content-inner">
             {view === "overview" && (
@@ -185,6 +201,8 @@ function Dashboard({
       {watching && (
         <LiveScreen siteId={siteId} sessionId={watching} onClose={() => setWatching(null)} />
       )}
+
+      <AlertToasts fired={alerts.fired} onDismiss={alerts.dismiss} />
     </div>
   );
 }

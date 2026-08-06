@@ -53,6 +53,18 @@ CREATE TABLE IF NOT EXISTS replay_chunks (
 
 CREATE INDEX IF NOT EXISTS idx_replay_session ON replay_chunks (site_id, session_id, seq);
 CREATE INDEX IF NOT EXISTS idx_replay_time ON replay_chunks (site_id, time DESC);
+
+-- Per-session curation: favorite flag and free-form tags, set from the
+-- dashboard. Separate from event data so it can be updated without touching
+-- the immutable event log.
+CREATE TABLE IF NOT EXISTS session_meta (
+    site_id     TEXT        NOT NULL,
+    session_id  TEXT        NOT NULL,
+    favorite    BOOLEAN     NOT NULL DEFAULT false,
+    tags        TEXT[]      NOT NULL DEFAULT '{}',
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (site_id, session_id)
+);
 `;
 
 const TIMESCALE_SETUP = `
