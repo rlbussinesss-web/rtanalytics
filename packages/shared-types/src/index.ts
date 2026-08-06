@@ -1,0 +1,150 @@
+/**
+ * Shared TypeScript types for RTAnalytics event pipeline.
+ * Used by: apps/tracker (producer), apps/ingest (consumer/validator),
+ * apps/dashboard-api & apps/dashboard-web (consumers), apps/workers (persistence).
+ *
+ * These types describe the *shape* of events. The runtime validation (zod)
+ * lives in packages/protocol, which infers its types from schemas that
+ * mirror these definitions.
+ */
+
+export const SCHEMA_VERSION = 1 as const;
+
+/** Discriminator for all event kinds captured by the tracker SDK. */
+export type EventType =
+  | "pageview"
+  | "heartbeat"
+  | "click"
+  | "scroll"
+  | "web-vitals"
+  | "error";
+
+/** Fields common to every event envelope, regardless of type. */
+export interface BaseEvent {
+  /** Schema version, allows evolving the event format without breaking older ingest/workers. */
+  schemaVersion: typeof SCHEMA_VERSION;
+  /** Client-generated UUID, used for idempotency/dedupe downstream. */
+  eventId: string;
+  /** Which site/tenant this event belongs to (public tracking key). */
+  siteId: string;
+  /** Anonymous long-lived visitor identifier, persisted in localStorage. */
+  visitorId: string;
+  /** Session identifier, rotated after inactivity. */
+  sessionId: string;
+  /** Event kind discriminator. */
+  eventType: EventType;
+  /** Client-side timestamp (ms since epoch) when the event was captured. */
+  timestamp: number;
+  /** Page path the event occurred on. */
+  path: string;
+  /** Raw referrer, if any. */
+  referrer?: string;
+}
+
+export interface PageviewPayload {
+  title?: string;
+  screenWidth?: number;
+  screenHeight?: number;
+}
+
+export interface PageviewEvent extends BaseEvent {
+  eventType: "pageview";
+  payload: PageviewPayload;
+}
+
+export interface HeartbeatPayload {
+  /** Seconds since the session started. */
+  sessionDurationSec: number;
+}
+
+export interface HeartbeatEvent extends BaseEvent {
+  eventType: "heartbeat";
+  payload: HeartbeatPayload;
+}
+
+export interface ClickPayload {
+  /** Simplified CSS-like selector of the clicked element. */
+  target: string;
+  x: number;
+  y: number;
+  text?: string;
+}
+
+export interface ClickEvent extends BaseEvent {
+  eventType: "click";
+  payload: ClickPayload;
+}
+
+export interface ScrollPayload {
+  /** Max scroll depth reached, 0-100. */
+  depthPct: number;
+}
+
+export interface ScrollEvent extends BaseEvent {
+  eventType: "scroll";
+  payload: ScrollPayload;
+}
+
+export type WebVitalName = "CLS" | "FID" | "LCP" | "FCP" | "TTFB" | "INP";
+
+export interface WebVitalsPayload {
+  name: WebVitalName;
+  value: number;
+  rating?: "good" | "needs-improvement" | "poor";
+}
+
+export interface WebVitalsEvent extends BaseEvent {
+  eventType: "web-vitals";
+  payload: WebVitalsPayload;
+}
+
+export interface ErrorPayload {
+  message: string;
+  stack?: string;
+  filename?: string;
+  lineno?: number;
+  colno?: number;
+}
+
+export interface ErrorEvent extends BaseEvent {
+  eventType: "error";
+  payload: ErrorPayload;
+}
+
+/** Union of every concrete event the tracker can emit. */
+export type TrackerEvent =
+  | PageviewEvent
+  | HeartbeatEvent
+  | ClickEvent
+  | ScrollEvent
+  | WebVitalsEvent
+  | ErrorEvent;
+
+/** Enriched fields that ingest attaches server-side before persistence/broadcast. */
+export interface EnrichedFields {
+  country?: string;
+  city?: string;
+  device?: string;
+  browser?: string;
+  os?: string;
+}
+
+export type EnrichedEvent = TrackerEvent & EnrichedFields;
+
+/** Row shape matching infra/migrations/001_init.sql `events` table. */
+export interface EventRow {
+  id: string;
+  site_id: string;
+  session_id: string;
+  visitor_id: string;
+  event_type: EventType;
+  path: string;
+  payload: Record<string, unknown>;
+  country: string | null;
+  city: string | null;
+  device: string | null;
+  browser: string | null;
+  os: string | null;
+  time: string; // ISO timestamp, hypertable partition column
+  created_at: string;
+}

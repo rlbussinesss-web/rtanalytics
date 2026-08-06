@@ -1,0 +1,21 @@
+server {
+    listen ${PORT};
+    server_name _;
+    root /usr/share/nginx/html;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json;
+    gzip_min_length 256;
+
+    # The tracker is embedded on third-party sites, so it must be fetchable
+    # cross-origin. It is a public asset by design — no secrets in it.
+    location = /tracker.js {
+        add_header Access-Control-Allow-Origin "*";
+        add_header Cache-Control "public, max-age=300";
+    }
+
+    # SPA fallback: unknown paths render the app rather than 404.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>RTAnalytics Demo Site</title>
+  </head>
+  <body>
+    <h1>Demo Site</h1>
+    <p>Esta página carrega o SDK do tracker para gerar eventos de teste.</p>
+    <button id="ping">Clicar aqui</button>
+
+    <!--
+      Build o tracker antes de abrir esta página:
+        pnpm --filter @rtanalytics/tracker build
+      Isso gera apps/tracker/dist/tracker.js referenciado abaixo.
+
+      data-site-id: identifica o site (bate com o siteId usado no dashboard-web,
+      veja apps/dashboard-web/src/App.tsx DEFAULT_SITE_ID).
+      data-ws-url: endereço do serviço apps/ingest.
+    -->
+    <script
+      src="../../apps/tracker/dist/tracker.js"
+      data-site-id="demo-site"
+      data-ws-url="ws://localhost:8081"
+      defer
+    ></script>
+  </body>
+</html>

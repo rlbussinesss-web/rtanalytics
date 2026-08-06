@@ -1,0 +1,38 @@
+name: rtanalytics
+
+# Local development infrastructure only. In production these two roles are
+# filled by the hosting platform's managed Redis and Postgres/Timescale.
+#
+# The event log runs on Redis Streams rather than a dedicated broker: at this
+# scale it provides the same at-least-once delivery, and one fewer service to
+# pay for and operate. Object storage (for session replay blobs) is not here
+# yet because replay is not implemented — it arrives with Phase 2.
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: rtanalytics-redis
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rtanalytics-timescaledb
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rtanalytics}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rtanalytics_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-rtanalytics}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+  timescale_data:

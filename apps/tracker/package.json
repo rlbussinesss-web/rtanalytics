@@ -1,0 +1,15 @@
+{
+  "name": "@rtanalytics/tracker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit && node esbuild.config.mjs",
+    "size": "node esbuild.config.mjs --report-size"
+  },
+  "devDependencies": {
+    "esbuild": "^0.23.1",
+    "typescript": "^5.6.3"
+  }
+}

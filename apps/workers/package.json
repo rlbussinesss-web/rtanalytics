@@ -1,0 +1,23 @@
+{
+  "name": "@rtanalytics/workers",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/persist-worker.js",
+  "scripts": {
+    "dev": "tsx watch src/persist-worker.ts",
+    "build": "tsc -b",
+    "start": "node dist/persist-worker.js"
+  },
+  "dependencies": {
+    "@rtanalytics/shared-types": "workspace:*",
+    "ioredis": "^5.4.1",
+    "pg": "^8.13.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3",
+    "@types/node": "^20.14.2",
+    "@types/pg": "^8.11.10"
+  }
+}
