@@ -18,6 +18,9 @@ export interface Metrics {
   conversionRate: number;
   avgSessionSec: number;
   bounceRate: number;
+  pagesPerSession: number;
+  newVisitors: number;
+  returningVisitors: number;
   timeseries: { bucket: string; visitors: number }[];
   topPages: TopItem[];
   topCountries: TopItem[];

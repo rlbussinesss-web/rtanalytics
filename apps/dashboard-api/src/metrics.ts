@@ -27,6 +27,9 @@ export interface Metrics {
   conversionRate: number;
   avgSessionSec: number;
   bounceRate: number;
+  pagesPerSession: number;
+  newVisitors: number;
+  returningVisitors: number;
   timeseries: { bucket: string; visitors: number }[];
   topPages: { label: string; count: number }[];
   topCountries: { label: string; count: number }[];
@@ -63,6 +66,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     topDevices,
     topBrowsers,
     topReferrers,
+    visitorMix,
   ] = await Promise.all([
     query<{
       visitors: string;
@@ -134,6 +138,22 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
         GROUP BY 1 ORDER BY count DESC LIMIT 8`,
       [siteId]
     ),
+    // New vs returning: a visitor active in the window is "returning" if their
+    // very first event ever predates the window. Computed from the events
+    // table itself — no extra state to store.
+    query<{ new_visitors: string; returning: string }>(
+      `SELECT
+          count(*) FILTER (WHERE first_seen >= ${since})::int AS new_visitors,
+          count(*) FILTER (WHERE first_seen <  ${since})::int AS returning
+        FROM (
+          SELECT visitor_id, min(time) AS first_seen
+            FROM events
+           WHERE site_id = $1
+           GROUP BY visitor_id
+          HAVING max(time) >= ${since}
+        ) v`,
+      [siteId]
+    ),
   ]);
 
   const t =
@@ -142,6 +162,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
   const b = bounce[0] ?? { bounced: "0", total: "0" };
   const totalSessions = Number(b.total);
   const sessionsCount = Number(t.sessions);
+  const mix = visitorMix[0] ?? { new_visitors: "0", returning: "0" };
 
   const asItems = (rows: { label: string; count: string | number }[]) =>
     rows.map((r) => ({ label: r.label, count: Number(r.count) }));
@@ -156,6 +177,9 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     conversionRate: sessionsCount > 0 ? Number(t.conversions) / sessionsCount : 0,
     avgSessionSec: Math.round(Number(duration[0]?.avg ?? 0)),
     bounceRate: totalSessions > 0 ? Number(b.bounced) / totalSessions : 0,
+    pagesPerSession: sessionsCount > 0 ? Number(t.pageviews) / sessionsCount : 0,
+    newVisitors: Number(mix.new_visitors),
+    returningVisitors: Number(mix.returning),
     timeseries: series.map((r) => ({
       bucket: r.bucket.toISOString(),
       visitors: Number(r.visitors),

@@ -382,6 +382,28 @@ body {
 .top-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .top-count { font-variant-numeric: tabular-nums; color: var(--text-muted); font-weight: 600; }
 
+/* donut ------------------------------------------------------------------ */
+.donut-wrap { display: flex; align-items: center; gap: 18px; }
+.donut-svg { width: 150px; height: 150px; flex-shrink: 0; }
+.donut-legend { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.donut-leg-row { display: flex; align-items: center; gap: 8px; padding: 4px 6px; border-radius: 6px; font-size: 12.5px; cursor: default; transition: opacity 0.15s, background 0.15s; }
+.donut-leg-row:hover { background: var(--hover); }
+.donut-swatch { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
+.donut-leg-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-muted); }
+.donut-leg-val { font-variant-numeric: tabular-nums; font-weight: 600; }
+
+/* new vs returning ------------------------------------------------------- */
+.nr-bar { display: flex; height: 44px; border-radius: 10px; overflow: hidden; margin: 20px 0 16px; background: var(--surface-2); }
+.nr-new { background: linear-gradient(90deg, var(--accent), #a855f7); transition: width 0.5s cubic-bezier(0.22,1,0.36,1); }
+.nr-ret { background: var(--surface-3); transition: width 0.5s cubic-bezier(0.22,1,0.36,1); }
+.nr-legend { display: flex; gap: 24px; }
+.nr-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-muted); }
+.nr-item b { color: var(--text); font-variant-numeric: tabular-nums; }
+.nr-pct { color: var(--text-faint); }
+.nr-dot { width: 9px; height: 9px; border-radius: 3px; }
+.nr-dot-new { background: var(--accent); }
+.nr-dot-ret { background: var(--surface-3); border: 1px solid var(--border-strong); }
+
 /* skeletons -------------------------------------------------------------- */
 .skel { background: linear-gradient(90deg, var(--surface-2) 25%, var(--surface-3) 37%, var(--surface-2) 63%); background-size: 400% 100%; animation: shimmer 1.4s ease infinite; border-radius: 6px; }
 @keyframes shimmer { from { background-position: 100% 0; } to { background-position: 0 0; } }
