@@ -176,15 +176,19 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
 
   const fit = useCallback(() => {
     const stage = stageRef.current;
-    const wrapper = hostRef.current?.querySelector<HTMLElement>(".replayer-wrapper");
-    const iframe = hostRef.current?.querySelector("iframe");
-    if (!stage || !wrapper || !iframe) return;
+    const host = hostRef.current;
+    const wrapper = host?.querySelector<HTMLElement>(".replayer-wrapper");
+    const iframe = host?.querySelector("iframe");
+    if (!stage || !host || !wrapper || !iframe) return;
     const w = iframe.offsetWidth, h = iframe.offsetHeight;
     if (!w || !h) return;
-    const scale = Math.min((stage.clientWidth - 32) / w, (stage.clientHeight - 32) / h, 1);
+    // Fit to width, scroll vertically (see LiveScreen for the rationale).
+    const scale = Math.min((stage.clientWidth - 24) / w, 1);
+    wrapper.style.transformOrigin = "top left";
     wrapper.style.transform = `scale(${scale})`;
-    wrapper.style.width = `${w}px`;
-    wrapper.style.height = `${h}px`;
+    host.style.width = `${w * scale}px`;
+    host.style.height = `${h * scale}px`;
+    host.style.margin = "0 auto";
   }, []);
 
   useEffect(() => {
@@ -209,6 +213,16 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
     })();
     return () => { cancelled = true; replayer?.destroy?.(); };
   }, [siteId, sessionId, fit]);
+
+  // Refit repeatedly: the iframe gets its real size a beat after mount.
+  useEffect(() => {
+    window.addEventListener("resize", fit);
+    const iv = setInterval(fit, 400);
+    return () => {
+      window.removeEventListener("resize", fit);
+      clearInterval(iv);
+    };
+  }, [fit]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();

@@ -46,24 +46,28 @@ export function LiveScreen({
   const [frameCount, setFrameCount] = useState(0);
 
   /**
-   * The visitor's viewport is usually wider than this panel, so the replay is
-   * scaled down to fit rather than shown behind scrollbars — the point is to
-   * see their whole screen at a glance.
+   * Fit the replay to the panel *width* and let it scroll vertically. Scaling
+   * to fit height too would shrink a tall desktop page to a thumbnail; fitting
+   * width matches how screen-share tools present it. The host div is sized to
+   * the scaled dimensions so it reserves the right space and centers.
    */
   const fitToStage = useCallback(() => {
     const stage = stageRef.current;
-    const wrapper = hostRef.current?.querySelector<HTMLElement>(".replayer-wrapper");
-    const iframe = hostRef.current?.querySelector("iframe");
-    if (!stage || !wrapper || !iframe) return;
+    const host = hostRef.current;
+    const wrapper = host?.querySelector<HTMLElement>(".replayer-wrapper");
+    const iframe = host?.querySelector("iframe");
+    if (!stage || !host || !wrapper || !iframe) return;
 
     const w = iframe.offsetWidth;
     const h = iframe.offsetHeight;
     if (!w || !h) return;
 
-    const scale = Math.min((stage.clientWidth - 32) / w, (stage.clientHeight - 32) / h, 1);
+    const scale = Math.min((stage.clientWidth - 24) / w, 1);
+    wrapper.style.transformOrigin = "top left";
     wrapper.style.transform = `scale(${scale})`;
-    wrapper.style.width = `${w}px`;
-    wrapper.style.height = `${h}px`;
+    host.style.width = `${w * scale}px`;
+    host.style.height = `${h * scale}px`;
+    host.style.margin = "0 auto";
   }, []);
 
   useEffect(() => {
@@ -117,7 +121,9 @@ export function LiveScreen({
         replayerRef.current = replayer;
         setStatus("ao vivo");
         setLive(true);
-        // Let the replayer lay out its iframe before measuring it.
+        // The iframe often has no size for a frame or two after creation, and
+        // a live desktop page keeps changing size — so refit repeatedly rather
+        // than once, which is what left large (desktop) pages unscaled/cut off.
         requestAnimationFrame(fitToStage);
         return;
       }
@@ -144,10 +150,16 @@ export function LiveScreen({
     };
   }, [siteId, sessionId, fitToStage]);
 
-  // Keep the replay fitted when the window (and therefore the stage) resizes.
+  // Keep the replay fitted: on window resize, and via a short polling interval
+  // that catches the iframe getting its real dimensions (which happens a beat
+  // after the replayer mounts) plus any live page-size changes.
   useEffect(() => {
     window.addEventListener("resize", fitToStage);
-    return () => window.removeEventListener("resize", fitToStage);
+    const iv = setInterval(fitToStage, 400);
+    return () => {
+      window.removeEventListener("resize", fitToStage);
+      clearInterval(iv);
+    };
   }, [fitToStage]);
 
   // Escape closes the viewer, which also stops the visitor's recording.

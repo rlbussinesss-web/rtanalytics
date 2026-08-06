@@ -532,7 +532,10 @@ body {
 .viewer { background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(1280px, 100%); height: min(860px, 92vh); display: flex; flex-direction: column; overflow: hidden; animation: pop 0.2s cubic-bezier(0.22,1,0.36,1); }
 @keyframes pop { from { opacity: 0; transform: scale(0.98) translateY(6px); } to { opacity: 1; transform: none; } }
 .viewer-head { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
-.stage { flex: 1; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; }
-.stage .replayer-wrapper { transform-origin: center center; }
+/* Scroll vertically; the replay is fitted to width by JS and centered via the
+ * host div's auto margins. Aligning to the top (not centering) is what keeps a
+ * tall desktop page from being clipped. */
+.stage { flex: 1; overflow: auto; background: var(--surface-2); padding: 12px; }
+.stage .replayer-wrapper { transform-origin: top left; }
 .stage iframe { background: #fff; border: none; box-shadow: var(--shadow); border-radius: 6px; }
 .spacer { margin-left: auto; }
