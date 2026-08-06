@@ -1,6 +1,35 @@
-# Deploy no Railway
+# Deploy no Railway + Vercel
 
-Guia para colocar o RTAnalytics no ar. São **6 serviços**: dois gerenciados
+## Ambiente atual (em produção)
+
+| Onde | O quê | Endereço |
+|---|---|---|
+| Vercel | painel + `tracker.js` | https://rtanalytics.vercel.app |
+| Railway | ingest (WebSocket público) | `ingest-production-e15e.up.railway.app` |
+| Railway | dashboard-api (REST + WS ao vivo) | `dashboard-api-production-f424.up.railway.app` |
+| Railway | workers, Redis, postgres/Timescale | rede interna |
+
+O painel fica na **Vercel** porque é um site estático: sai de graça, ganha CDN
+global, e mantém o Railway dentro do limite de 5 serviços do plano de teste.
+Só o que precisa de conexão permanente (ingest, dashboard-api, workers) vive
+no Railway — a Vercel não suporta WebSocket nem processos contínuos.
+
+Para republicar o painel após mudar o frontend:
+
+```powershell
+$env:VITE_DASHBOARD_API_URL="https://dashboard-api-production-f424.up.railway.app"
+$env:VITE_DASHBOARD_API_WS_URL="wss://dashboard-api-production-f424.up.railway.app"
+$env:VITE_SITE_ID="meu-site"
+pnpm --filter @rtanalytics/dashboard-web deploy
+```
+
+Os serviços do Railway republicam sozinhos a cada `git push` na branch `main`.
+
+---
+
+## Guia de referência (montar do zero)
+
+São **6 serviços**: dois gerenciados
 pelo Railway (Redis e Postgres/Timescale) e quatro construídos a partir dos
 Dockerfiles deste repositório.
 
