@@ -97,6 +97,141 @@ body {
   margin-left: auto;
 }
 
+/* ----------------------------------------------------------------- tabs */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 550;
+  padding: 9px 4px;
+  margin-right: 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tab.is-active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.range-tabs {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  margin-bottom: 18px;
+}
+
+.range-tab {
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 550;
+  padding: 6px 14px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.range-tab.is-active {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ---------------------------------------------------------- charts/tops */
+
+.chart-card {
+  padding: 16px;
+}
+
+.bars {
+  width: 100%;
+  height: 120px;
+  display: block;
+}
+
+.bar {
+  fill: var(--accent);
+  transition: fill 0.15s;
+}
+
+.bar:hover {
+  fill: var(--text);
+}
+
+.tops {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+}
+
+.top-card {
+  padding: 14px 16px;
+}
+
+.top-title {
+  font-size: 12px;
+  font-weight: 620;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.top-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+/* The soft bar behind each row makes relative magnitude readable at a glance. */
+.top-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  background: var(--accent-soft);
+  border-radius: 6px;
+  z-index: 0;
+}
+
+.top-label,
+.top-count {
+  position: relative;
+  z-index: 1;
+}
+
+.top-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-count {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-weight: 550;
+}
+
 /* ---------------------------------------------------------------- pills */
 
 .pill {

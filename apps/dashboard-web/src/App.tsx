@@ -3,6 +3,8 @@ import { useLiveEvents, type LiveEvent } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
 import { LiveScreen } from "./LiveScreen";
+import { MetricsPanel } from "./MetricsPanel";
+import type { RangeKey } from "./useMetrics";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
 import "./styles.css";
 
@@ -73,6 +75,8 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const onlineCount = useOnlineCount(siteId, events);
   const sessions = useSessions(siteId, events);
   const [watching, setWatching] = useState<string | null>(null);
+  const [tab, setTab] = useState<"live" | "metrics">("live");
+  const [range, setRange] = useState<RangeKey>("24h");
 
   // Most recent path + enrichment per session, for the visitor list.
   const infoBySession = useMemo(() => {
@@ -103,6 +107,36 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         </button>
       </header>
 
+      <nav className="tabs">
+        <button
+          className={`tab${tab === "live" ? " is-active" : ""}`}
+          onClick={() => setTab("live")}
+        >
+          Ao vivo
+        </button>
+        <button
+          className={`tab${tab === "metrics" ? " is-active" : ""}`}
+          onClick={() => setTab("metrics")}
+        >
+          Métricas
+        </button>
+      </nav>
+
+      {tab === "metrics" ? (
+        <MetricsPanel siteId={siteId} range={range} onRangeChange={setRange} />
+      ) : (
+        <LiveView />
+      )}
+
+      {watching && (
+        <LiveScreen siteId={siteId} sessionId={watching} onClose={() => setWatching(null)} />
+      )}
+    </div>
+  );
+
+  function LiveView() {
+    return (
+      <>
       <div className="grid">
         <Stat value={onlineCount} label="visitantes online" />
         <Stat value={sessions.length} label="sessões ativas" />
@@ -156,16 +190,9 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
           ))}
         </ul>
       </section>
-
-      {watching && (
-        <LiveScreen
-          siteId={siteId}
-          sessionId={watching}
-          onClose={() => setWatching(null)}
-        />
-      )}
-    </div>
-  );
+      </>
+    );
+  }
 }
 
 /** Turns a two-letter country code into its flag emoji (BR → 🇧🇷). */
