@@ -28,11 +28,14 @@ const VIEW_TITLES: Record<ViewKey, string> = {
 
 export function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
-  useTheme(); // apply persisted theme even on the login screen
+  // Single source of truth for the theme, applied app-wide (login included).
+  const [theme, toggleTheme] = useTheme();
 
   if (!authed) return <LoginScreen onSuccess={() => setAuthed(true)} />;
   return (
     <Dashboard
+      theme={theme}
+      onToggleTheme={toggleTheme}
       onLogout={() => {
         clearToken();
         setAuthed(false);
@@ -89,7 +92,15 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
   );
 }
 
-function Dashboard({ onLogout }: { onLogout: () => void }) {
+function Dashboard({
+  theme,
+  onToggleTheme,
+  onLogout,
+}: {
+  theme: "dark" | "light";
+  onToggleTheme: () => void;
+  onLogout: () => void;
+}) {
   const siteId = DEFAULT_SITE_ID;
   const { events, connected } = useLiveEvents(siteId);
   const onlineCount = useOnlineCount(siteId, events);
@@ -97,7 +108,6 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [watching, setWatching] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>("overview");
   const [range, setRange] = useState<RangeKey>("24h");
-  const [theme, toggleTheme] = useTheme();
 
   const infoBySession = useMemo(() => {
     const map = new Map<string, LiveEvent>();
@@ -122,7 +132,7 @@ function Dashboard({ onLogout }: { onLogout: () => void }) {
         onNavigate={setView}
         onlineCount={onlineCount}
         theme={theme}
-        onToggleTheme={toggleTheme}
+        onToggleTheme={onToggleTheme}
         onLogout={onLogout}
       />
       <div className="main">
