@@ -47,6 +47,12 @@
   --font: "Inter", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI",
     Roboto, sans-serif;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Motion tokens (Emil Kowalski's curves): strong custom easings — the
+   * built-in ones are too weak for deliberate UI motion. All UI stays <300ms. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);       /* entrances/exits — responsive */
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);   /* on-screen A→B movement */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);    /* iOS-like drawer/panel */
 }
 
 :root[data-theme="light"] {
@@ -266,9 +272,11 @@ body {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px; border-radius: var(--radius-sm);
   border: 1px solid transparent; cursor: pointer;
-  transition: background 0.15s, border-color 0.15s, transform 0.05s, opacity 0.15s;
+  transition: background 0.15s var(--ease-out), border-color 0.15s var(--ease-out),
+    transform 0.13s var(--ease-out), opacity 0.15s;
 }
-.btn:active { transform: translateY(1px); }
+/* Press feedback: a subtle scale-down makes the button feel physical. */
+.btn:active { transform: scale(0.97); }
 .btn svg { width: 15px; height: 15px; }
 .btn-primary { background: var(--accent); color: #fff; }
 .btn-primary:hover { background: var(--accent-hover); }
@@ -296,8 +304,18 @@ body {
 }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 22px; }
 
-.stat-card { padding: 16px 18px; position: relative; overflow: hidden; transition: border-color 0.18s, transform 0.18s; }
+.stat-card { padding: 16px 18px; position: relative; overflow: hidden; transition: border-color 0.18s var(--ease-out), transform 0.18s var(--ease-out); }
 .stat-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
+/* Staggered entrance on mount (once per view — live value updates keep the
+ * same element, so they don't re-trigger it). Decorative, never blocks input. */
+.grid .stat-card { animation: card-in 0.34s var(--ease-out) both; }
+.grid .stat-card:nth-child(2) { animation-delay: 0.04s; }
+.grid .stat-card:nth-child(3) { animation-delay: 0.08s; }
+.grid .stat-card:nth-child(4) { animation-delay: 0.12s; }
+.grid .stat-card:nth-child(5) { animation-delay: 0.16s; }
+.grid .stat-card:nth-child(6) { animation-delay: 0.2s; }
+.grid .stat-card:nth-child(n+7) { animation-delay: 0.24s; }
+@keyframes card-in { from { opacity: 0; transform: translateY(7px) scale(0.985); } to { opacity: 1; transform: none; } }
 .stat-top { display: flex; align-items: center; gap: 9px; margin-bottom: 12px; }
 .stat-ico { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
 .stat-ico svg { width: 16px; height: 16px; }
@@ -398,8 +416,8 @@ body {
 
 /* new vs returning ------------------------------------------------------- */
 .nr-bar { display: flex; height: 44px; border-radius: 10px; overflow: hidden; margin: 20px 0 16px; background: var(--surface-2); }
-.nr-new { background: linear-gradient(90deg, var(--accent), #a855f7); transition: width 0.5s cubic-bezier(0.22,1,0.36,1); }
-.nr-ret { background: var(--surface-3); transition: width 0.5s cubic-bezier(0.22,1,0.36,1); }
+.nr-new { background: linear-gradient(90deg, var(--accent), #a855f7); transition: width 0.5s var(--ease-out); }
+.nr-ret { background: var(--surface-3); transition: width 0.5s var(--ease-out); }
 .nr-legend { display: flex; gap: 24px; }
 .nr-item { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--text-muted); }
 .nr-item b { color: var(--text); font-variant-numeric: tabular-nums; }
@@ -493,7 +511,7 @@ body {
 .alert-time { font-size: 10.5px; color: var(--text-faint); }
 .alert-x { border: none; background: transparent; color: var(--text-faint); cursor: pointer; padding: 2px; }
 .toast-stack { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
-.toast { display: flex; align-items: center; gap: 9px; padding: 11px 15px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); font-size: 13px; cursor: pointer; animation: slide-toast 0.3s cubic-bezier(0.22,1,0.36,1); max-width: 340px; }
+.toast { display: flex; align-items: center; gap: 9px; padding: 11px 15px; border-radius: 10px; background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); font-size: 13px; cursor: pointer; animation: slide-toast 0.3s var(--ease-out); max-width: 340px; }
 @keyframes slide-toast { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: none; } }
 .toast.bad { border-left: 3px solid var(--danger); } .toast.bad svg { color: var(--danger); }
 .toast.warn { border-left: 3px solid var(--warning); } .toast.warn svg { color: var(--warning); }
@@ -527,13 +545,13 @@ body {
 .funnel-step-num { font-variant-numeric: tabular-nums; font-weight: 600; }
 .funnel-rate { color: var(--text-faint); font-weight: 450; }
 .funnel-track { height: 40px; background: var(--surface-2); border-radius: 10px; overflow: hidden; border: 1px solid var(--border); }
-.funnel-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #a855f7); border-radius: 10px; transition: width 0.5s cubic-bezier(0.22,1,0.36,1); min-width: 3px; }
+.funnel-fill { height: 100%; background: linear-gradient(90deg, var(--accent), #a855f7); border-radius: 10px; transition: width 0.5s var(--ease-out); min-width: 3px; }
 .funnel-drop { font-size: 12px; color: var(--danger); padding-left: 2px; }
 
 /* live viewer / recorded player modal ------------------------------------ */
 .backdrop { position: fixed; inset: 0; background: rgba(6, 7, 9, 0.7); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 24px; z-index: 100; animation: fadein 0.18s ease-out; }
 @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
-.viewer { background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(1280px, 100%); height: min(860px, 92vh); display: flex; flex-direction: column; overflow: hidden; animation: pop 0.2s cubic-bezier(0.22,1,0.36,1); }
+.viewer { background: var(--surface-1); border: 1px solid var(--border-strong); border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: min(1280px, 100%); height: min(860px, 92vh); display: flex; flex-direction: column; overflow: hidden; animation: pop 0.2s var(--ease-out); }
 @keyframes pop { from { opacity: 0; transform: scale(0.98) translateY(6px); } to { opacity: 1; transform: none; } }
 .viewer-head { display: flex; align-items: center; gap: 12px; padding: 13px 18px; border-bottom: 1px solid var(--border); }
 /* Scroll vertically; the replay is fitted to width by JS and centered via the
@@ -567,6 +585,23 @@ body {
 .speed-btn { font: inherit; font-size: 11.5px; font-weight: 600; padding: 4px 8px; border: none; border-radius: 6px; background: transparent; color: var(--text-muted); cursor: pointer; font-variant-numeric: tabular-nums; }
 .speed-btn.is-active { background: var(--surface-3); color: var(--text); }
 
+/* accessibility & touch --------------------------------------------------- */
+/* Touch devices fire a false :hover on tap — don't let cards jump on press. */
+@media (hover: none) {
+  .stat-card:hover, .visitor-card:hover, .replay-card:hover { transform: none; }
+}
+/* Respect reduced-motion: keep opacity/colour cues, drop movement and loops.
+ * (Gentler, not zero — transitions that aid comprehension stay.) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.12s !important;
+  }
+  .stat-card:hover, .visitor-card:hover, .replay-card:hover { transform: none; }
+  .pill .dot, .presence-badge .dot { animation: none !important; }
+}
+
 /* mobile ----------------------------------------------------------------- */
 /* Hidden on desktop; the drawer + hamburger only exist on small screens. */
 .menu-btn { display: none; }
@@ -578,7 +613,7 @@ body {
   /* Sidebar becomes an off-canvas drawer toggled by the hamburger. */
   .sidebar {
     position: fixed; top: 0; left: 0; bottom: 0; width: 264px; z-index: 60;
-    transform: translateX(-100%); transition: transform 0.22s cubic-bezier(0.22,1,0.36,1);
+    transform: translateX(-100%); transition: transform 0.3s var(--ease-drawer);
   }
   .sidebar.is-open { transform: none; box-shadow: var(--shadow-lg); }
   .nav-backdrop {
