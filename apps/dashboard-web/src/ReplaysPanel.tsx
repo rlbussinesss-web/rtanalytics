@@ -270,6 +270,18 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
     else r.pause(ms);
   }, [playing]);
 
+  // Jump to a marker and PAUSE there. Markers point at away periods, which
+  // skipInactive fast-forwards through — so if we kept playing, the player
+  // would immediately skip past the very moment the marker points to and the
+  // badge would flip back to "active". Pausing lets the viewer inspect it.
+  const seekPausedTo = useCallback((ms: number) => {
+    const r = replayerRef.current;
+    if (!r) return;
+    r.pause(ms);
+    setPlaying(false);
+    setCurrentMs(ms);
+  }, []);
+
   const changeSpeed = useCallback((s: number) => {
     setSpeed(s);
     replayerRef.current?.setConfig({ speed: s });
@@ -441,8 +453,8 @@ function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessio
                 key={i}
                 className={`tl-marker ${m.state === "left" ? "left" : "hidden"}`}
                 style={{ left: `${m.pct}%` }}
-                title={`${m.state === "left" ? "Saiu do site" : "Foi para segundo plano"} em ${fmtClock(m.offsetMs)}`}
-                onClick={() => seekTo(m.offsetMs)}
+                title={`${m.state === "left" ? "Saiu do site" : "Foi para segundo plano"} em ${fmtClock(m.offsetMs)} — clique para ver`}
+                onClick={() => seekPausedTo(m.offsetMs)}
               />
             ))}
           </div>
