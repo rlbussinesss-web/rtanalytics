@@ -21,6 +21,13 @@ export interface Metrics {
   pagesPerSession: number;
   newVisitors: number;
   returningVisitors: number;
+  rageClickRate: number;
+  deadClickRate: number;
+  errorRate: number;
+  errorCount: number;
+  avgScrollDepth: number;
+  webVitals: { name: string; value: number; rating: "good" | "needs-improvement" | "poor" }[];
+  performanceScore: number;
   timeseries: { bucket: string; visitors: number }[];
   topPages: TopItem[];
   topCountries: TopItem[];

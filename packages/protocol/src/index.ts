@@ -42,7 +42,10 @@ export const clickSchema = z.object({
     target: z.string().max(512),
     x: z.number(),
     y: z.number(),
+    vw: z.number().optional(),
     text: z.string().max(256).optional(),
+    rage: z.boolean().optional(),
+    dead: z.boolean().optional(),
   }),
 });
 

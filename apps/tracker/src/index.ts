@@ -3,6 +3,7 @@ import type { AnyTrackerEvent } from "./types";
 import { getVisitorId, getSessionId, uuid } from "./ids";
 import { Transport } from "./transport";
 import { Recorder } from "./recorder";
+import { installBehavior } from "./behavior";
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -133,6 +134,11 @@ class RTATracker {
     this.transport.connect();
     this.trackPageview();
     setInterval(() => this.trackHeartbeat(), HEARTBEAT_INTERVAL_MS);
+
+    // Always-on behavioural capture (clicks, scroll, errors, web vitals).
+    installBehavior((eventType, payload) => {
+      this.transport.send({ ...this.baseEnvelope(), eventType, payload } as AnyTrackerEvent);
+    });
 
     // Best-effort: flush a final heartbeat-ish signal before unload.
     window.addEventListener("pagehide", () => {

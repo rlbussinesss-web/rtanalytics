@@ -67,9 +67,16 @@ export interface HeartbeatEvent extends BaseEvent {
 export interface ClickPayload {
   /** Simplified CSS-like selector of the clicked element. */
   target: string;
+  /** Page coordinates (include scroll), so heatmaps can place the point. */
   x: number;
   y: number;
+  /** Viewport width at click time, to normalize across screen sizes. */
+  vw?: number;
   text?: string;
+  /** Rapid repeated clicks in the same spot — a frustration signal. */
+  rage?: boolean;
+  /** Click that produced no DOM change or navigation — likely a broken element. */
+  dead?: boolean;
 }
 
 export interface ClickEvent extends BaseEvent {

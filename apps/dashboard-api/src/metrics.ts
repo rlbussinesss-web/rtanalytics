@@ -30,12 +30,41 @@ export interface Metrics {
   pagesPerSession: number;
   newVisitors: number;
   returningVisitors: number;
+  // Behaviour insights (share of sessions unless noted).
+  rageClickRate: number;
+  deadClickRate: number;
+  errorRate: number;
+  errorCount: number;
+  avgScrollDepth: number;
+  webVitals: { name: string; value: number; rating: "good" | "needs-improvement" | "poor" }[];
+  performanceScore: number;
   timeseries: { bucket: string; visitors: number }[];
   topPages: { label: string; count: number }[];
   topCountries: { label: string; count: number }[];
   topDevices: { label: string; count: number }[];
   topBrowsers: { label: string; count: number }[];
   topReferrers: { label: string; count: number }[];
+}
+
+const VITAL_THRESHOLDS: Record<string, [number, number]> = {
+  LCP: [2500, 4000],
+  CLS: [0.1, 0.25],
+  INP: [200, 500],
+  FCP: [1800, 3000],
+  TTFB: [800, 1800],
+};
+
+function rateVital(name: string, value: number): "good" | "needs-improvement" | "poor" {
+  const t = VITAL_THRESHOLDS[name];
+  if (!t) return "good";
+  return value <= t[0] ? "good" : value <= t[1] ? "needs-improvement" : "poor";
+}
+
+/** 0-100 score: average of each captured vital's rating (good=100, ni=60, poor=20). */
+function performanceScore(vitals: { rating: string }[]): number {
+  if (vitals.length === 0) return 0;
+  const pts = vitals.map((v) => (v.rating === "good" ? 100 : v.rating === "needs-improvement" ? 60 : 20));
+  return Math.round(pts.reduce((a, b) => a + b, 0) / pts.length);
 }
 
 export async function computeMetrics(siteId: string, range: RangeKey): Promise<Metrics> {
@@ -67,6 +96,9 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     topBrowsers,
     topReferrers,
     visitorMix,
+    behavior,
+    scrollDepth,
+    vitals,
   ] = await Promise.all([
     query<{
       visitors: string;
@@ -154,6 +186,33 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
         ) v`,
       [siteId]
     ),
+    // Frustration signals: sessions with a rage/dead click and JS errors.
+    query<{ rage: string; dead: string; err_sessions: string; err_count: string }>(
+      `SELECT
+          count(DISTINCT session_id) FILTER (WHERE event_type='click' AND (payload->>'rage')::boolean)::int AS rage,
+          count(DISTINCT session_id) FILTER (WHERE event_type='click' AND (payload->>'dead')::boolean)::int AS dead,
+          count(DISTINCT session_id) FILTER (WHERE event_type='error')::int AS err_sessions,
+          count(*) FILTER (WHERE event_type='error')::int AS err_count
+        FROM events WHERE site_id = $1 AND time >= ${since}`,
+      [siteId]
+    ),
+    // Average of each session's deepest scroll.
+    query<{ avg: string | null }>(
+      `SELECT avg(maxd)::float AS avg FROM (
+          SELECT session_id, max((payload->>'depthPct')::float) AS maxd
+            FROM events WHERE site_id = $1 AND time >= ${since} AND event_type = 'scroll'
+            GROUP BY session_id
+        ) s`,
+      [siteId]
+    ),
+    // p75 of each Core Web Vital, the standard way to report them.
+    query<{ name: string; p75: string }>(
+      `SELECT name, percentile_cont(0.75) WITHIN GROUP (ORDER BY val) AS p75 FROM (
+          SELECT payload->>'name' AS name, (payload->>'value')::float AS val
+            FROM events WHERE site_id = $1 AND time >= ${since} AND event_type = 'web-vitals'
+        ) v GROUP BY name`,
+      [siteId]
+    ),
   ]);
 
   const t =
@@ -163,6 +222,11 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
   const totalSessions = Number(b.total);
   const sessionsCount = Number(t.sessions);
   const mix = visitorMix[0] ?? { new_visitors: "0", returning: "0" };
+  const bh = behavior[0] ?? { rage: "0", dead: "0", err_sessions: "0", err_count: "0" };
+  const vitalsOut = vitals.map((v) => {
+    const value = Math.round(Number(v.p75) * 1000) / 1000;
+    return { name: v.name, value, rating: rateVital(v.name, value) };
+  });
 
   const asItems = (rows: { label: string; count: string | number }[]) =>
     rows.map((r) => ({ label: r.label, count: Number(r.count) }));
@@ -180,6 +244,13 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     pagesPerSession: sessionsCount > 0 ? Number(t.pageviews) / sessionsCount : 0,
     newVisitors: Number(mix.new_visitors),
     returningVisitors: Number(mix.returning),
+    rageClickRate: sessionsCount > 0 ? Number(bh.rage) / sessionsCount : 0,
+    deadClickRate: sessionsCount > 0 ? Number(bh.dead) / sessionsCount : 0,
+    errorRate: sessionsCount > 0 ? Number(bh.err_sessions) / sessionsCount : 0,
+    errorCount: Number(bh.err_count),
+    avgScrollDepth: Math.round(Number(scrollDepth[0]?.avg ?? 0)),
+    webVitals: vitalsOut,
+    performanceScore: performanceScore(vitalsOut),
     timeseries: series.map((r) => ({
       bucket: r.bucket.toISOString(),
       visitors: Number(r.visitors),

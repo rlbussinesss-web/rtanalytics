@@ -3,6 +3,7 @@ import { useMetrics, type Metrics, type RangeKey, type TopItem } from "./useMetr
 import { StatCard } from "./components/StatCard";
 import { AreaChart } from "./components/AreaChart";
 import { Donut } from "./components/Donut";
+import { InsightsPanel } from "./components/InsightsPanel";
 import { flag, fmtDuration, deviceLabel } from "./lib/ui";
 
 const RANGES: [RangeKey, string][] = [["24h", "24 horas"], ["7d", "7 dias"], ["30d", "30 dias"]];
@@ -73,6 +74,8 @@ function MetricsBody({ m }: { m: Metrics }) {
           <Donut data={m.topDevices.map((d) => ({ label: d.label, value: d.count }))} format={deviceLabel} />
         </div>
       </div>
+
+      <InsightsPanel m={m} />
 
       <div className="tops">
         <TopList title="Top páginas" items={m.topPages} />
