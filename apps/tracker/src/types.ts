@@ -16,7 +16,8 @@ export type EventType =
   | "web-vitals"
   | "error"
   | "replay-chunk"
-  | "conversion";
+  | "conversion"
+  | "visibility";
 
 export interface BaseEvent {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -62,10 +63,16 @@ export type ConversionEvent = TrackerEventEnvelope<
   { name: string; value?: number }
 >;
 
+export type VisibilityEvent = TrackerEventEnvelope<
+  "visibility",
+  { state: "hidden" | "visible" | "left" }
+>;
+
 export type AnyTrackerEvent =
   | PageviewEvent
   | HeartbeatEvent
   | ClickEvent
   | ScrollEvent
   | ReplayChunkEvent
-  | ConversionEvent;
+  | ConversionEvent
+  | VisibilityEvent;

@@ -199,7 +199,7 @@ function Dashboard({
       </div>
 
       {watching && (
-        <LiveScreen siteId={siteId} sessionId={watching} onClose={() => setWatching(null)} />
+        <LiveScreen siteId={siteId} sessionId={watching} onClose={() => setWatching(null)} events={events} />
       )}
 
       <AlertToasts fired={alerts.fired} onDismiss={alerts.dismiss} />
@@ -306,7 +306,7 @@ function EventsSection({ events }: { events: LiveEvent[] }) {
       </div>
       <ul className="list is-scrollable">
         {events.length === 0 && <li className="empty">Aguardando eventos…</li>}
-        {events.map((event) => (
+        {events.filter((e) => e.eventType !== "visibility").map((event) => (
           <li key={event.eventId} className="row event-row">
             <span className={`tag${event.eventType === "pageview" ? " is-pageview" : event.eventType === "conversion" ? " is-conversion" : ""}`}>
               {event.eventType}

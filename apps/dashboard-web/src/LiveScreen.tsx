@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Replayer } from "rrweb";
+import { EyeOff, LogOut, WifiOff } from "lucide-react";
 // Without rrweb's stylesheet the replayer's iframe has no dimensions and the
 // stage renders blank even though frames are arriving.
 import "rrweb/dist/style.css";
 import { WS_BASE_URL, getToken } from "./token";
+import type { LiveEvent } from "./useLiveEvents";
 
 /**
  * Live screen viewer — reconstructs the visitor's page from rrweb frames as
@@ -32,10 +34,12 @@ export function LiveScreen({
   siteId,
   sessionId,
   onClose,
+  events,
 }: {
   siteId: string;
   sessionId: string;
   onClose: () => void;
+  events: LiveEvent[];
 }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
@@ -171,6 +175,28 @@ export function LiveScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
+  // Presence: derive from the live event feed for this session. A "left" event
+  // means the visitor closed/navigated away; "hidden" means the tab is
+  // backgrounded. Also fall back to staleness — if no event has arrived from
+  // this session for a while, treat them as gone (pagehide isn't guaranteed).
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const iv = setInterval(() => setTick((t) => t + 1), 4000);
+    return () => clearInterval(iv);
+  }, []);
+
+  const presence = useMemo(() => {
+    void tick; // re-evaluate staleness on each tick
+    const mine = events.filter((e) => e.sessionId === sessionId);
+    const lastSeen = mine[0]?.timestamp ?? 0;
+    const lastVis = mine.find((e) => e.eventType === "visibility");
+    const state = (lastVis?.payload?.state as string) ?? "visible";
+    if (state === "left") return { kind: "left" as const };
+    if (lastSeen && Date.now() - lastSeen > 40_000) return { kind: "gone" as const };
+    if (state === "hidden") return { kind: "hidden" as const };
+    return { kind: "active" as const };
+  }, [events, sessionId, tick]);
+
   return (
     <div className="backdrop" onClick={onClose}>
       <div className="viewer" onClick={(e) => e.stopPropagation()}>
@@ -181,6 +207,7 @@ export function LiveScreen({
             <i className="dot" />
             {status}
           </span>
+          <PresenceBadge kind={presence.kind} />
           <span className="section-count spacer">{frameCount} quadros</span>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>
             Fechar
@@ -188,7 +215,38 @@ export function LiveScreen({
         </header>
         <div className="stage" ref={stageRef}>
           <div ref={hostRef} />
+          {presence.kind !== "active" && <PresenceOverlay kind={presence.kind} />}
         </div>
+      </div>
+    </div>
+  );
+}
+
+type PresenceKind = "active" | "hidden" | "left" | "gone";
+
+const PRESENCE: Record<Exclude<PresenceKind, "active">, { label: string; icon: React.ReactNode; tone: string }> = {
+  hidden: { label: "Aba em segundo plano", icon: <EyeOff size={14} />, tone: "warn" },
+  gone: { label: "Sem sinal — provavelmente saiu", icon: <WifiOff size={14} />, tone: "warn" },
+  left: { label: "Visitante saiu do site", icon: <LogOut size={14} />, tone: "bad" },
+};
+
+function PresenceBadge({ kind }: { kind: PresenceKind }) {
+  if (kind === "active") {
+    return <span className="presence-badge active"><i className="dot" /> Visitante ativo</span>;
+  }
+  const p = PRESENCE[kind];
+  return <span className={`presence-badge ${p.tone}`}>{p.icon} {p.label}</span>;
+}
+
+function PresenceOverlay({ kind }: { kind: PresenceKind }) {
+  if (kind === "active") return null;
+  const p = PRESENCE[kind];
+  return (
+    <div className="presence-overlay">
+      <div className={`presence-card ${p.tone}`}>
+        <span className="presence-ico">{p.icon}</span>
+        <b>{p.label}</b>
+        <span>{kind === "hidden" ? "A tela volta assim que o visitante retornar à aba." : "A transmissão recomeça se o visitante voltar."}</span>
       </div>
     </div>
   );

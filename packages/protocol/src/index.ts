@@ -106,6 +106,14 @@ export const conversionSchema = z.object({
   }),
 });
 
+export const visibilitySchema = z.object({
+  ...baseFields,
+  eventType: z.literal("visibility"),
+  payload: z.object({
+    state: z.enum(["hidden", "visible", "left"]),
+  }),
+});
+
 /** Discriminated union covering every event type the ingest server accepts. */
 export const trackerEventSchema = z.discriminatedUnion("eventType", [
   pageviewSchema,
@@ -116,6 +124,7 @@ export const trackerEventSchema = z.discriminatedUnion("eventType", [
   errorSchema,
   replayChunkSchema,
   conversionSchema,
+  visibilitySchema,
 ]);
 
 export type PageviewEvent = z.infer<typeof pageviewSchema>;

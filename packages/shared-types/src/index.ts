@@ -19,7 +19,8 @@ export type EventType =
   | "web-vitals"
   | "error"
   | "replay-chunk"
-  | "conversion";
+  | "conversion"
+  | "visibility";
 
 /** Fields common to every event envelope, regardless of type. */
 export interface BaseEvent {
@@ -150,6 +151,16 @@ export interface ConversionEvent extends BaseEvent {
   payload: ConversionPayload;
 }
 
+export interface VisibilityPayload {
+  /** "hidden" = tab backgrounded, "visible" = returned, "left" = page unloaded. */
+  state: "hidden" | "visible" | "left";
+}
+
+export interface VisibilityEvent extends BaseEvent {
+  eventType: "visibility";
+  payload: VisibilityPayload;
+}
+
 /** Commands the server pushes down to a connected tracker. */
 export type TrackerCommand =
   | { type: "start-recording" }
@@ -164,7 +175,8 @@ export type TrackerEvent =
   | WebVitalsEvent
   | ErrorEvent
   | ReplayChunkEvent
-  | ConversionEvent;
+  | ConversionEvent
+  | VisibilityEvent;
 
 /** Enriched fields that ingest attaches server-side before persistence/broadcast. */
 export interface EnrichedFields {

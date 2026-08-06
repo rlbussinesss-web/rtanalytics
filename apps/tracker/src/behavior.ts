@@ -20,6 +20,20 @@ export function installBehavior(emit: Emit): void {
   installScroll(emit);
   installErrors(emit);
   installVitals(emit);
+  installVisibility(emit);
+}
+
+// ------------------------------------------------------------- visibility
+function installVisibility(emit: Emit): void {
+  // Tells a live viewer when the visitor backgrounds the tab, returns, or
+  // leaves the page — so "is this person still here?" is answerable.
+  document.addEventListener("visibilitychange", () => {
+    emit("visibility", { state: document.visibilityState === "hidden" ? "hidden" : "visible" });
+  });
+  // pagehide fires on navigation away / tab close; best-effort final signal.
+  window.addEventListener("pagehide", () => {
+    emit("visibility", { state: "left" });
+  });
 }
 
 // --------------------------------------------------------------- clicks

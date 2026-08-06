@@ -539,3 +539,17 @@ body {
 .stage .replayer-wrapper { transform-origin: top left; }
 .stage iframe { background: #fff; border: none; box-shadow: var(--shadow); border-radius: 6px; }
 .spacer { margin-left: auto; }
+
+/* live presence ---------------------------------------------------------- */
+.presence-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 550; }
+.presence-badge.active { background: var(--success-soft); color: var(--success); }
+.presence-badge.active .dot { background: currentColor; animation: pulse 1.8s ease-in-out infinite; }
+.presence-badge.warn { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.presence-badge.bad { background: var(--danger-soft); color: var(--danger); }
+.presence-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--surface-2) 72%, transparent); backdrop-filter: blur(2px); animation: fadein 0.2s ease-out; }
+.presence-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 34px; border-radius: var(--radius); background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); text-align: center; max-width: 320px; }
+.presence-card b { font-size: 15px; }
+.presence-card span { font-size: 12.5px; color: var(--text-muted); }
+.presence-ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; }
+.presence-card.warn .presence-ico { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
+.presence-card.bad .presence-ico { background: var(--danger-soft); color: var(--danger); }
