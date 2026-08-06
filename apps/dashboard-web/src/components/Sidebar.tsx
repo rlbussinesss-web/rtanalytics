@@ -62,7 +62,7 @@ export function Sidebar({
 
       <button className="ws-switch">
         <span className="ws-dot" />
-        <span>{siteId}</span>
+        <span className="ws-name">{siteId}</span>
         <ChevronsUpDown size={14} color="var(--text-faint)" />
       </button>
 
