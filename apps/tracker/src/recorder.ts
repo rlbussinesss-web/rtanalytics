@@ -12,7 +12,11 @@
  * mutation would dominate both CPU and bandwidth.
  */
 
-const FLUSH_INTERVAL_MS = 250;
+// How often buffered frames are shipped. This is the dominant knob for how
+// "live" the stream feels: at 250ms the viewer only got ~4 updates/sec, which
+// reads as choppy. 60ms gives ~16 updates/sec — smooth — and only runs while
+// someone is actually watching, so the extra messages cost nothing otherwise.
+const FLUSH_INTERVAL_MS = 60;
 const MAX_FRAMES_PER_CHUNK = 500;
 
 interface RrwebGlobal {
@@ -126,9 +130,11 @@ export class Recorder {
         blockClass: "rta-block",
         recordCanvas: false,
         collectFonts: false,
-        // Throttle the two highest-frequency signals; 50ms of mouse resolution
-        // is imperceptible on playback but cuts frame volume dramatically.
-        sampling: { mousemove: 50, scroll: 100, input: "last" },
+        // Capture the cursor at ~50fps and scroll at ~30fps so playback is
+        // fluid. rrweb records mousemove as timestamped position arrays that
+        // the replayer interpolates, so this is what makes the pointer glide
+        // rather than jump.
+        sampling: { mousemove: 20, scroll: 33, input: "last" },
       });
 
     // rrweb returns undefined if it refused to start. Treating that as
