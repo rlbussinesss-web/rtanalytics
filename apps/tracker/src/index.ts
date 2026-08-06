@@ -108,6 +108,16 @@ class RTATracker {
     });
   }
 
+  /**
+   * Identifiers for this visitor/session. The host site reads these when a
+   * payment is created (`window.rta.identify()`) and stores them with the
+   * order, so its backend can later report the confirmed payment back to
+   * RTAnalytics tied to the right session.
+   */
+  identify(): { visitorId: string; sessionId: string } {
+    return { visitorId: this.visitorId, sessionId: this.sessionId };
+  }
+
   private trackHeartbeat(): void {
     this.transport.send({
       ...this.baseEnvelope(),

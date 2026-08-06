@@ -1,6 +1,7 @@
 import Fastify from "fastify";
 import websocketPlugin from "@fastify/websocket";
 import type { WebSocket } from "ws";
+import { randomUUID, timingSafeEqual } from "node:crypto";
 import { parseTrackerEvent } from "@rtanalytics/protocol";
 import { publishEvent, recordReplayChunk } from "./stream.js";
 import { touchPresence, publishLiveEvent, publishReplayChunk } from "./redis.js";
@@ -28,6 +29,22 @@ function isSiteAllowed(siteId: string): boolean {
   return ALLOWED_SITE_IDS.size === 0 || ALLOWED_SITE_IDS.has(siteId);
 }
 
+/**
+ * Server-to-server key for the payment/conversion webhook. This is how a
+ * *confirmed* payment is reported — the browser can't reliably know a Pix was
+ * paid (the visitor may have closed the tab and paid later), so the site's
+ * backend / payment gateway calls this endpoint from its own payment-confirmed
+ * handler. Empty key means the endpoint is disabled (secure by default).
+ */
+const SERVER_INGEST_KEY = process.env.SERVER_INGEST_KEY ?? "";
+
+function validServerKey(candidate: unknown): boolean {
+  if (!SERVER_INGEST_KEY || typeof candidate !== "string") return false;
+  const a = Buffer.from(candidate);
+  const b = Buffer.from(SERVER_INGEST_KEY);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 // trustProxy makes req.ip read X-Forwarded-For, which is how the real visitor
 // IP reaches us behind Railway's proxy — without it every visitor would look
 // like they came from the proxy's address and geo would be useless.
@@ -43,6 +60,65 @@ app.get("/healthz", async () => ({
   status: "ok",
   connections: connectionCount(),
 }));
+
+/**
+ * Server-side conversion webhook. Called by the site's backend / payment
+ * gateway when a payment is *confirmed* (e.g. Pix paid). Works regardless of
+ * whether the visitor's browser is still open — this is the reliable source of
+ * truth for "paid", unlike any client-side guess.
+ *
+ * The caller links it to the visitor by passing the visitorId/sessionId it
+ * captured from window.rta when the payment was created.
+ */
+app.post("/api/server-event", async (req, reply) => {
+  if (!validServerKey(req.headers["x-rta-key"])) {
+    return reply.code(401).send({ error: "unauthorized" });
+  }
+  const b = (req.body ?? {}) as {
+    siteId?: string;
+    visitorId?: string;
+    sessionId?: string;
+    name?: string;
+    value?: number;
+    path?: string;
+  };
+  if (!b.siteId || !isSiteAllowed(b.siteId)) {
+    return reply.code(403).send({ error: "unknown_site" });
+  }
+  if (!b.visitorId || !b.sessionId || !b.name) {
+    return reply.code(400).send({ error: "missing visitorId, sessionId or name" });
+  }
+
+  const event = {
+    schemaVersion: 1 as const,
+    eventId: randomUUID(),
+    siteId: b.siteId,
+    visitorId: b.visitorId,
+    sessionId: b.sessionId,
+    eventType: "conversion" as const,
+    timestamp: Date.now(),
+    path: (b.path ?? "(servidor)").slice(0, 2048),
+    payload: {
+      name: String(b.name).slice(0, 128),
+      value: typeof b.value === "number" ? b.value : undefined,
+    },
+  };
+
+  // Validate against the same schema browser events use, then push it through
+  // the normal pipeline so it lands in metrics/funnel and pops in the live feed.
+  const parsed = parseTrackerEvent(event);
+  if (!parsed.success) {
+    return reply.code(400).send({ error: `validation_error: ${parsed.error}` });
+  }
+  await Promise.all([
+    publishEvent(event.siteId, event.eventType, event),
+    publishLiveEvent(event.siteId, event).catch((err) =>
+      app.log.warn({ err }, "server-event live publish failed")
+    ),
+  ]);
+  app.log.info({ sessionId: event.sessionId, name: event.payload.name }, "server conversion recorded");
+  return { ok: true };
+});
 
 app.register(async (fastify) => {
   fastify.get("/", { websocket: true }, (socket: WebSocket, req) => {
