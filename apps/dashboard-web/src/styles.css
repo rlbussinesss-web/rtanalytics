@@ -547,7 +547,9 @@ body {
 .presence-badge.warn { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
 .presence-badge.bad { background: var(--danger-soft); color: var(--danger); }
 .presence-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: color-mix(in srgb, var(--surface-2) 72%, transparent); backdrop-filter: blur(2px); animation: fadein 0.2s ease-out; }
-.presence-card { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 34px; border-radius: var(--radius); background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); text-align: center; max-width: 320px; }
+.presence-card { position: relative; display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 26px 34px; border-radius: var(--radius); background: var(--surface-1); border: 1px solid var(--border-strong); box-shadow: var(--shadow-lg); text-align: center; max-width: 320px; }
+.presence-close { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; display: grid; place-items: center; border: none; background: var(--surface-3); color: var(--text-muted); border-radius: 7px; cursor: pointer; transition: background 0.15s, color 0.15s; }
+.presence-close:hover { background: var(--hover); color: var(--text); }
 .presence-card b { font-size: 15px; }
 .presence-card span { font-size: 12.5px; color: var(--text-muted); }
 .presence-ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; }

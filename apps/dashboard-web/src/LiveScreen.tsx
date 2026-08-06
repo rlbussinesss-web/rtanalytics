@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Replayer } from "rrweb";
-import { EyeOff, LogOut, WifiOff } from "lucide-react";
+import { EyeOff, LogOut, WifiOff, X } from "lucide-react";
 // Without rrweb's stylesheet the replayer's iframe has no dimensions and the
 // stage renders blank even though frames are arriving.
 import "rrweb/dist/style.css";
@@ -197,6 +197,11 @@ export function LiveScreen({
     return { kind: "active" as const };
   }, [events, sessionId, tick]);
 
+  // The overlay can be dismissed to peek at the (frozen) screen behind it; it
+  // re-appears whenever the presence state changes to a new non-active state.
+  const [dismissedKind, setDismissedKind] = useState<string | null>(null);
+  const overlayVisible = presence.kind !== "active" && dismissedKind !== presence.kind;
+
   return (
     <div className="backdrop" onClick={onClose}>
       <div className="viewer" onClick={(e) => e.stopPropagation()}>
@@ -215,7 +220,9 @@ export function LiveScreen({
         </header>
         <div className="stage" ref={stageRef}>
           <div ref={hostRef} />
-          {presence.kind !== "active" && <PresenceOverlay kind={presence.kind} />}
+          {overlayVisible && (
+            <PresenceOverlay kind={presence.kind} onDismiss={() => setDismissedKind(presence.kind)} />
+          )}
         </div>
       </div>
     </div>
@@ -238,12 +245,15 @@ function PresenceBadge({ kind }: { kind: PresenceKind }) {
   return <span className={`presence-badge ${p.tone}`}>{p.icon} {p.label}</span>;
 }
 
-function PresenceOverlay({ kind }: { kind: PresenceKind }) {
+function PresenceOverlay({ kind, onDismiss }: { kind: PresenceKind; onDismiss: () => void }) {
   if (kind === "active") return null;
   const p = PRESENCE[kind];
   return (
     <div className="presence-overlay">
       <div className={`presence-card ${p.tone}`}>
+        <button className="presence-close" title="Fechar aviso" onClick={onDismiss}>
+          <X size={15} />
+        </button>
         <span className="presence-ico">{p.icon}</span>
         <b>{p.label}</b>
         <span>{kind === "hidden" ? "A tela volta assim que o visitante retornar à aba." : "A transmissão recomeça se o visitante voltar."}</span>
