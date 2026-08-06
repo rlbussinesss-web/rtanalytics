@@ -5,3 +5,6 @@ dist/
 .env
 infra/.env
 .DS_Store
+
+.playwright-mcp/
+*.png

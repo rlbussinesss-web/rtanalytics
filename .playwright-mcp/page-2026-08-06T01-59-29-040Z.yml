@@ -1,8 +1,0 @@
-- generic [active] [ref=f1e1]:
-  - heading "Página de teste" [level=1] [ref=f1e2]
-  - paragraph [ref=f1e3]:
-    - text: "Esta página carrega o tracker exatamente como um site monitorado faria. Deixe-a aberta e abra o painel em outra aba: você deve aparecer como visitante online, com um"
-    - code [ref=f1e4]: pageview
-    - text: imediato e um
-    - code [ref=f1e5]: heartbeat
-    - text: a cada 15 segundos.

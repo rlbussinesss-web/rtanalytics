@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Replayer } from "rrweb";
+// Without rrweb's stylesheet the replayer's iframe has no dimensions and the
+// stage renders blank even though frames are arriving.
+import "rrweb/dist/style.css";
 import { WS_BASE_URL, getToken } from "./token";
 
 /**
@@ -22,6 +25,7 @@ interface ReplayChunk {
 
 type RrwebFrame = { type: number; timestamp: number };
 
+const META = 4;
 const FULL_SNAPSHOT = 2;
 
 export function LiveScreen({
@@ -66,8 +70,18 @@ export function LiveScreen({
         const snapshotAt = pendingRef.current.findIndex((f) => f.type === FULL_SNAPSHOT);
         if (snapshotAt === -1 || !hostRef.current) return;
 
-        // Anything before the first full snapshot cannot be rendered.
-        const usable = pendingRef.current.slice(snapshotAt);
+        // Start from the Meta frame that precedes the snapshot, not from the
+        // snapshot itself: Meta carries the recorded viewport size, and
+        // without it the replayer's iframe is created with no dimensions and
+        // renders blank.
+        let start = snapshotAt;
+        for (let i = snapshotAt - 1; i >= 0; i -= 1) {
+          if (pendingRef.current[i]!.type === META) {
+            start = i;
+            break;
+          }
+        }
+        const usable = pendingRef.current.slice(start);
         pendingRef.current = [];
 
         const replayer = new Replayer(usable as never[], {

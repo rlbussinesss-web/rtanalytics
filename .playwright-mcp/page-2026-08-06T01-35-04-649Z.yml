@@ -1,4 +1,0 @@
-- generic [ref=e4]:
-  - heading "RTAnalytics" [level=1] [ref=e5]
-  - textbox "Senha do painel" [active] [ref=e6]
-  - button "Entrar" [disabled] [ref=e7] [cursor=pointer]
