@@ -162,8 +162,20 @@ function rate(name: VitalName, value: number): "good" | "needs-improvement" | "p
 
 function installVitals(emit: Emit): void {
   const sent = new Set<VitalName>();
+
+  // Paint-based metrics (LCP/FCP) are unreliable if the tab was ever hidden
+  // before the paint — a backgrounded tab can report a paint tens of seconds
+  // late. Track that and discard those metrics, matching web-vitals' behavior.
+  let wasHidden = document.visibilityState === "hidden";
+  addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") wasHidden = true;
+  });
+
   const report = (name: VitalName, value: number) => {
     if (sent.has(name)) return;
+    // Guard against implausible values (background-tab artifacts).
+    if (value < 0 || value > 60000) return;
+    if ((name === "LCP" || name === "FCP") && wasHidden) return;
     sent.add(name);
     emit("web-vitals", { name, value: Math.round(value * 1000) / 1000, rating: rate(name, value) });
   };
