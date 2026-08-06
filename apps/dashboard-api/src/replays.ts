@@ -35,7 +35,7 @@ export interface ReplayFilter {
 }
 
 export async function listReplays(siteId: string, filter: ReplayFilter = {}): Promise<ReplaySummary[]> {
-  const conds: string[] = ["r.site_id = $1"];
+  const conds: string[] = ["true"];
   const params: unknown[] = [siteId];
   if (filter.favoritesOnly) conds.push("coalesce(m.favorite, false) = true");
   if (filter.device) {
