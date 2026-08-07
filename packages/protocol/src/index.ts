@@ -24,6 +24,25 @@ export const pageviewSchema = z.object({
     title: z.string().max(512).optional(),
     screenWidth: z.number().int().nonnegative().optional(),
     screenHeight: z.number().int().nonnegative().optional(),
+    // Device/context attributes for audience analysis.
+    vw: z.number().int().nonnegative().optional(),
+    vh: z.number().int().nonnegative().optional(),
+    dpr: z.number().nonnegative().optional(),
+    lang: z.string().max(35).optional(),
+    tz: z.string().max(64).optional(),
+    conn: z.string().max(16).optional(),
+    mem: z.number().nonnegative().optional(),
+    cores: z.number().int().nonnegative().optional(),
+    // Acquisition: campaign + ad click ids from the landing URL.
+    utm_source: z.string().max(200).optional(),
+    utm_medium: z.string().max(200).optional(),
+    utm_campaign: z.string().max(200).optional(),
+    utm_content: z.string().max(200).optional(),
+    utm_term: z.string().max(200).optional(),
+    gclid: z.string().max(200).optional(),
+    fbclid: z.string().max(200).optional(),
+    ttclid: z.string().max(200).optional(),
+    msclkid: z.string().max(200).optional(),
   }),
 });
 

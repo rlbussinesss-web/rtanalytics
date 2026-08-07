@@ -48,6 +48,23 @@ export interface PageviewPayload {
   title?: string;
   screenWidth?: number;
   screenHeight?: number;
+  vw?: number;
+  vh?: number;
+  dpr?: number;
+  lang?: string;
+  tz?: string;
+  conn?: string;
+  mem?: number;
+  cores?: number;
+  utm_source?: string;
+  utm_medium?: string;
+  utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
+  gclid?: string;
+  fbclid?: string;
+  ttclid?: string;
+  msclkid?: string;
 }
 
 export interface PageviewEvent extends BaseEvent {
@@ -181,6 +198,7 @@ export type TrackerEvent =
 /** Enriched fields that ingest attaches server-side before persistence/broadcast. */
 export interface EnrichedFields {
   country?: string;
+  region?: string;
   city?: string;
   device?: string;
   browser?: string;

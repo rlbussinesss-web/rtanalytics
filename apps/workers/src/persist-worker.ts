@@ -41,6 +41,7 @@ function toRow(payloadJson: string): EventInsertRow {
     path: String(data.path ?? ""),
     payload: (data.payload as Record<string, unknown>) ?? {},
     country: (data.country as string) ?? null,
+    region: (data.region as string) ?? null,
     city: (data.city as string) ?? null,
     device: (data.device as string) ?? null,
     browser: (data.browser as string) ?? null,

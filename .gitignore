@@ -8,3 +8,6 @@ infra/.env
 
 .playwright-mcp/
 *.png
+.agents/
+.claude/skills/
+skills-lock.json

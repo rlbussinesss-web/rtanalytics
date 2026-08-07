@@ -686,3 +686,47 @@ body {
 .presence-ico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; }
 .presence-card.warn .presence-ico { background: color-mix(in srgb, var(--warning) 16%, transparent); color: var(--warning); }
 .presence-card.bad .presence-ico { background: var(--danger-soft); color: var(--danger); }
+
+/* ---- Público / audiência ---- */
+.audience-grid { margin-top: 4px; }
+
+.winner-card {
+  padding: 20px 22px;
+  margin-bottom: 20px;
+  background: linear-gradient(135deg, var(--accent-soft), transparent 70%);
+  border: 1px solid var(--accent-ring);
+}
+.winner-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+  color: var(--accent); margin-bottom: 12px;
+}
+.winner-main {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 20px; flex-wrap: wrap;
+}
+.winner-dim { display: block; font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.winner-main h2 { font-size: 24px; font-weight: 650; }
+.winner-stats { display: flex; gap: 26px; }
+.winner-stats > div { text-align: right; }
+.winner-stats b { display: block; font-size: 20px; font-weight: 650; color: var(--success); }
+.winner-stats span { font-size: 12px; color: var(--text-muted); }
+
+.seg-row { padding: 9px 0; border-bottom: 1px solid var(--border); }
+.seg-row:last-child { border-bottom: none; }
+.seg-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+.seg-label { font-size: 13px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 68%; }
+.seg-rate { font-size: 13px; font-weight: 650; color: var(--success); }
+.seg-bar-track { height: 6px; border-radius: 6px; background: var(--surface-2); overflow: hidden; }
+.seg-bar {
+  display: block; height: 100%; border-radius: 6px;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  transition: width 0.4s var(--ease-out, ease);
+}
+.seg-meta { font-size: 11px; color: var(--text-muted); margin-top: 5px; }
+.seg-rev { color: var(--success); }
+
+.empty-state { text-align: center; padding: 44px 28px; color: var(--text-muted); }
+.empty-state svg { color: var(--accent); margin-bottom: 12px; }
+.empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 8px; }
+.empty-state p { font-size: 13px; line-height: 1.6; max-width: 460px; margin: 0 auto; }

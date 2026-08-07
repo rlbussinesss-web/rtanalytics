@@ -4,6 +4,7 @@ import { getVisitorId, getSessionId, uuid } from "./ids";
 import { Transport } from "./transport";
 import { Recorder } from "./recorder";
 import { installBehavior } from "./behavior";
+import { collectAttributes } from "./attributes";
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -99,12 +100,8 @@ class RTATracker {
     this.transport.send({
       ...this.baseEnvelope(),
       eventType: "pageview",
-      payload: {
-        title: document.title,
-        screenWidth: window.screen?.width,
-        screenHeight: window.screen?.height,
-      },
-    });
+      payload: { title: document.title, ...collectAttributes() },
+    } as AnyTrackerEvent);
   }
 
   /**

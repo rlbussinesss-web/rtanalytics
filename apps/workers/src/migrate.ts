@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS events (
     path        TEXT        NOT NULL,
     payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
     country     TEXT,
+    region      TEXT,
     city        TEXT,
     device      TEXT,
     browser     TEXT,
@@ -34,6 +35,9 @@ CREATE TABLE IF NOT EXISTS events (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (id, time)
 );
+
+-- Backfill-safe: existing deployments created the table before the region column.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS region TEXT;
 
 CREATE INDEX IF NOT EXISTS idx_events_site_time ON events (site_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events (session_id, time DESC);

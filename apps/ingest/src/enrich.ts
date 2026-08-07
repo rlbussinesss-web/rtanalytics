@@ -21,7 +21,7 @@ export function enrichFromConnection(ip: string | undefined, userAgent: string |
   return { ...geoFromIp(ip), ...deviceFromUserAgent(userAgent) };
 }
 
-function geoFromIp(ip: string | undefined): Pick<EnrichedFields, "country" | "city"> {
+function geoFromIp(ip: string | undefined): Pick<EnrichedFields, "country" | "region" | "city"> {
   if (!ip) return {};
   // Strip a possible IPv6-mapped IPv4 prefix (::ffff:1.2.3.4) that geoip rejects.
   const clean = ip.replace(/^::ffff:/, "");
@@ -29,6 +29,9 @@ function geoFromIp(ip: string | undefined): Pick<EnrichedFields, "country" | "ci
   if (!found) return {};
   return {
     country: found.country || undefined,
+    // `region` is the ISO subdivision code (e.g. "SP", "RJ") — the state the
+    // visitor is in, which matters for targeting the buying audience by region.
+    region: found.region || undefined,
     city: found.city || undefined,
   };
 }
