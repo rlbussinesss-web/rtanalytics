@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Clock, MousePointerClick, Users, Zap } from "lucide-react";
+import { Activity, Clock, Users, Zap } from "lucide-react";
 import { useLiveEvents, type LiveEvent } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
@@ -11,26 +11,17 @@ import { FunnelPanel } from "./FunnelPanel";
 import { HeatmapView } from "./HeatmapView";
 import { ReplaysPanel } from "./ReplaysPanel";
 import type { RangeKey } from "./useMetrics";
-import { Sidebar, type ViewKey } from "./components/Sidebar";
-import { Topbar } from "./components/Topbar";
+import type { ViewKey } from "./components/Sidebar";
+import { CommandBar } from "./components/CommandBar";
+import { AoVivo } from "./AoVivo";
 import { StatCard } from "./components/StatCard";
 import { VisitorCard } from "./components/VisitorCard";
-import { AlertsBell, AlertToasts } from "./components/AlertsCenter";
+import { AlertToasts } from "./components/AlertsCenter";
 import { useAlerts } from "./useAlerts";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
 import "./styles.css";
 
 const DEFAULT_SITE_ID = import.meta.env.VITE_SITE_ID ?? "demo-site";
-
-const VIEW_TITLES: Record<ViewKey, string> = {
-  overview: "Visão geral",
-  live: "Ao vivo",
-  metrics: "Métricas",
-  audience: "Público",
-  heatmaps: "Mapas de calor",
-  funnel: "Funil",
-  replays: "Gravações",
-};
 
 export function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
@@ -112,9 +103,8 @@ function Dashboard({
   const onlineCount = useOnlineCount(siteId, events);
   const sessions = useSessions(siteId, events);
   const [watching, setWatching] = useState<string | null>(null);
-  const [view, setView] = useState<ViewKey>("overview");
+  const [view, setView] = useState<ViewKey>("live");
   const [range, setRange] = useState<RangeKey>("24h");
-  const [navOpen, setNavOpen] = useState(false);
   const alerts = useAlerts(events, onlineCount);
 
   const infoBySession = useMemo(() => {
@@ -146,41 +136,20 @@ function Dashboard({
 
   return (
     <div className="shell">
-      <Sidebar
-        siteId={siteId}
+      <CommandBar
         active={view}
-        onNavigate={(v) => {
-          setView(v);
-          setNavOpen(false);
-        }}
+        onNavigate={setView}
         onlineCount={onlineCount}
+        connected={connected}
         theme={theme}
         onToggleTheme={onToggleTheme}
         onLogout={onLogout}
-        open={navOpen}
       />
-      {navOpen && <div className="nav-backdrop" onClick={() => setNavOpen(false)} />}
       <div className="main">
-        <Topbar
-          title={VIEW_TITLES[view]}
-          siteId={siteId}
-          connected={connected}
-          onMenu={() => setNavOpen(true)}
-          actions={
-            <AlertsBell
-              fired={alerts.fired}
-              rules={alerts.rules}
-              onToggleRule={alerts.toggleRule}
-              onRequestPermission={alerts.requestPermission}
-              onDismiss={alerts.dismiss}
-            />
-          }
-        />
-        <div className="content">
+        <div className={`content${view === "live" ? " is-floor" : ""}`}>
           <div className="content-inner">
-            {view === "overview" && (
-              <OverviewView
-                siteId={siteId}
+            {view === "live" && (
+              <AoVivo
                 onlineCount={onlineCount}
                 sessions={sessions}
                 events={events}
@@ -190,8 +159,9 @@ function Dashboard({
                 onWatch={setWatching}
               />
             )}
-            {view === "live" && (
-              <LiveView
+            {view === "overview" && (
+              <OverviewView
+                siteId={siteId}
                 onlineCount={onlineCount}
                 sessions={sessions}
                 events={events}
@@ -274,20 +244,6 @@ function OverviewView({ siteId, ...p }: LiveProps & { siteId: string }) {
         <StatCard icon={<Clock size={16} />} name="Site" value={siteId} accent="#10b981" />
       </div>
 
-      <VisitorsSection {...p} />
-      <EventsSection events={p.events} />
-    </>
-  );
-}
-
-function LiveView(p: LiveProps) {
-  return (
-    <>
-      <div className="grid">
-        <StatCard icon={<Users size={16} />} name="Visitantes online" value={p.onlineCount} />
-        <StatCard icon={<Activity size={16} />} name="Sessões ativas" value={p.sessions.length} accent="#8b5cf6" />
-        <StatCard icon={<MousePointerClick size={16} />} name="Eventos ao vivo" value={p.events.length} accent="#06b6d4" />
-      </div>
       <VisitorsSection {...p} />
       <EventsSection events={p.events} />
     </>
