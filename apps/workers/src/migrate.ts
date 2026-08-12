@@ -20,6 +20,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS events (
     id          UUID        NOT NULL DEFAULT uuid_generate_v4(),
     time        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    event_id    TEXT,
     site_id     TEXT        NOT NULL,
     session_id  TEXT        NOT NULL,
     visitor_id  TEXT        NOT NULL,
@@ -36,8 +37,19 @@ CREATE TABLE IF NOT EXISTS events (
     PRIMARY KEY (id, time)
 );
 
--- Backfill-safe: existing deployments created the table before the region column.
+-- Backfill-safe: existing deployments created the table before these columns.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS region TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS event_id TEXT;
+
+-- Idempotency: the client generates a stable event_id per event. Because the
+-- Redis stream is at-least-once, an event can be redelivered (worker crash
+-- before XACK) and would otherwise be inserted twice, inflating every count.
+-- This unique index lets the insert dedupe with ON CONFLICT DO NOTHING. The
+-- partition column time is included because a hypertable requires it in any
+-- unique index; the client timestamp is identical across redeliveries, so the
+-- (event_id, time) pair is stable. Old rows have event_id NULL and NULLs are
+-- distinct, so they never collide.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_events_event_id ON events (event_id, time);
 
 CREATE INDEX IF NOT EXISTS idx_events_site_time ON events (site_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events (session_id, time DESC);

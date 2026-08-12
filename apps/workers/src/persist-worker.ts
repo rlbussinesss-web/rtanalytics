@@ -34,6 +34,7 @@ interface Pending {
 function toRow(payloadJson: string): EventInsertRow {
   const data = JSON.parse(payloadJson) as Record<string, unknown>;
   return {
+    eventId: typeof data.eventId === "string" ? data.eventId : "",
     siteId: String(data.siteId),
     sessionId: String(data.sessionId),
     visitorId: String(data.visitorId),

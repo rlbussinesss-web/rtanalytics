@@ -16,6 +16,7 @@ export function getPool(): pg.Pool {
 }
 
 export interface EventInsertRow {
+  eventId: string;
   siteId: string;
   sessionId: string;
   visitorId: string;
@@ -31,11 +32,33 @@ export interface EventInsertRow {
   time: Date;
 }
 
-/** Batch inserts rows into the `events` hypertable using a single multi-row INSERT. */
+/**
+ * Batch inserts rows into the `events` hypertable using a single multi-row
+ * INSERT, deduplicated by the client's event_id so metrics stay exact.
+ *
+ * Two layers of dedupe: within the batch (a redelivery could land in the same
+ * flush) rows are collapsed by (event_id, time) before building the statement,
+ * and across batches `ON CONFLICT (event_id, time) DO NOTHING` drops anything
+ * already persisted. Together they make ingestion idempotent under the
+ * pipeline's at-least-once delivery, so no event is ever counted twice.
+ */
 export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
   if (rows.length === 0) return;
 
+  // Collapse intra-batch duplicates so the single statement can't conflict with
+  // itself (and to keep the payload small). Rows without an event_id can't be
+  // deduped, so they always pass through.
+  const seen = new Set<string>();
+  const deduped = rows.filter((r) => {
+    if (!r.eventId) return true;
+    const key = `${r.eventId}|${r.time.getTime()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   const columns = [
+    "event_id",
     "site_id",
     "session_id",
     "visitor_id",
@@ -54,12 +77,13 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
   const values: unknown[] = [];
   const valuePlaceholders: string[] = [];
 
-  rows.forEach((row, i) => {
+  deduped.forEach((row, i) => {
     const base = i * columns.length;
     valuePlaceholders.push(
       `(${columns.map((_, j) => `$${base + j + 1}`).join(", ")})`
     );
     values.push(
+      row.eventId || null,
       row.siteId,
       row.sessionId,
       row.visitorId,
@@ -76,7 +100,9 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
     );
   });
 
-  const sql = `INSERT INTO events (${columns.join(", ")}) VALUES ${valuePlaceholders.join(", ")}`;
+  const sql =
+    `INSERT INTO events (${columns.join(", ")}) VALUES ${valuePlaceholders.join(", ")} ` +
+    `ON CONFLICT (event_id, time) DO NOTHING`;
   const client = getPool();
   await client.query(sql, values);
 }
