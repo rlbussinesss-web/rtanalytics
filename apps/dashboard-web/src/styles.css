@@ -8,43 +8,49 @@
  * runtime animation library or bundle cost.
  */
 
-/* ── Tinta & Latão ──────────────────────────────────────────────────────
- * Ink ground with a blue-cool bias; champagne-gold as the one accent —
- * because gold *is* conversion, the product's whole subject. Cyan is
- * reserved strictly for the live/now pulse. Numbers live in tabular mono. */
+/* ── Bento / Radar ──────────────────────────────────────────────────────
+ * Dark-committed charcoal ground with a faint grid, glass tiles, a single
+ * warm orange accent and a red alert tile. Green = live pulse; cyan + pink
+ * carry the chart series. Numbers stay in tabular figures. */
 :root {
   color-scheme: dark;
 
-  /* layered ink surfaces */
-  --bg: #0a0d13;
-  --surface-1: #0e121b;
-  --surface-2: #121824;
-  --surface-3: #18202e;
-  --hover: rgba(174, 192, 224, 0.05);
-  --border: rgba(174, 192, 224, 0.09);
-  --border-strong: rgba(174, 192, 224, 0.17);
+  /* charcoal surfaces (dark is the design target) */
+  --bg: #161616;
+  --surface-1: #1b1b1b;
+  --surface-2: #202020;
+  --surface-3: #262626;
+  --hover: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.14);
 
-  --text: #e7ebf3;
-  --text-muted: #8b95ab;
-  --text-faint: #565f73;
+  --text: #ededed;
+  --text-muted: #8b8b8b;
+  --text-faint: #5e5e5e;
 
-  /* latão — accent + conversion semantic, one and the same */
-  --accent: #e4b860;
-  --accent-hover: #f0ce86;
-  --accent-soft: rgba(228, 184, 96, 0.13);
-  --accent-ring: rgba(228, 184, 96, 0.32);
+  /* orange — the one accent */
+  --accent: #ff6b2c;
+  --accent-hover: #ff8a3d;
+  --accent-soft: rgba(255, 107, 44, 0.14);
+  --accent-ring: rgba(255, 107, 44, 0.35);
   --gold: var(--accent);
-  --gold-2: #f0ce86;
+  --gold-2: #ff8a3d;
 
-  /* ciano — the live/now signal, used sparingly */
-  --live: #63e2e6;
-  --live-soft: rgba(99, 226, 230, 0.12);
+  /* green — the live/now pulse */
+  --live: #3ed66a;
+  --live-soft: rgba(62, 214, 106, 0.14);
 
-  --success: #4ade9e;
-  --success-soft: rgba(74, 222, 158, 0.13);
+  /* chart series */
+  --cyan: #46d9e0;
+  --pink: #ff5c8a;
+
+  --success: #3ed66a;
+  --success-soft: rgba(62, 214, 106, 0.14);
   --warning: #f2a93b;
-  --danger: #f0616d;
-  --danger-soft: rgba(240, 97, 109, 0.13);
+  --danger: #ff4327;
+  --danger-soft: rgba(255, 67, 39, 0.14);
+  --grid-line: rgba(255, 255, 255, 0.022);
+  --glow: rgba(255, 107, 44, 0.06);
 
   --radius-sm: 8px;
   --radius: 12px;
@@ -69,29 +75,33 @@
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --bg: #f4f6fa;
+  --bg: #f2f2f0;
   --surface-1: #ffffff;
   --surface-2: #ffffff;
-  --surface-3: #f7f9fc;
-  --hover: rgba(18, 28, 48, 0.035);
-  --border: rgba(18, 28, 48, 0.09);
-  --border-strong: rgba(18, 28, 48, 0.16);
-  --text: #131926;
-  --text-muted: #596074;
-  --text-faint: #8b93a4;
-  --accent: #9c7a22;
-  --accent-hover: #b08a2c;
-  --accent-soft: rgba(154, 122, 34, 0.1);
-  --accent-ring: rgba(154, 122, 34, 0.3);
+  --surface-3: #f4f4f2;
+  --hover: rgba(20, 20, 20, 0.04);
+  --border: rgba(20, 20, 20, 0.1);
+  --border-strong: rgba(20, 20, 20, 0.17);
+  --text: #1a1a1a;
+  --text-muted: #6a6a6a;
+  --text-faint: #9a9a9a;
+  --accent: #e5551d;
+  --accent-hover: #ff6b2c;
+  --accent-soft: rgba(229, 85, 29, 0.1);
+  --accent-ring: rgba(229, 85, 29, 0.3);
   --gold: var(--accent);
-  --gold-2: #b08a2c;
-  --live: #0e9aa0;
-  --live-soft: rgba(14, 154, 160, 0.1);
-  --success: #12996b;
-  --success-soft: rgba(18, 153, 107, 0.1);
+  --gold-2: #ff6b2c;
+  --live: #16a34a;
+  --live-soft: rgba(22, 163, 74, 0.1);
+  --cyan: #0e9aa0;
+  --pink: #e0447a;
+  --success: #16a34a;
+  --success-soft: rgba(22, 163, 74, 0.1);
   --warning: #b4740c;
-  --danger: #c6394a;
-  --danger-soft: rgba(198, 57, 74, 0.1);
+  --danger: #e5401f;
+  --danger-soft: rgba(229, 64, 31, 0.1);
+  --grid-line: rgba(20, 20, 20, 0.035);
+  --glow: rgba(229, 85, 29, 0.05);
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow: 0 6px 20px rgba(16, 24, 40, 0.08);
   --shadow-lg: 0 28px 60px -30px rgba(16, 24, 40, 0.22);
@@ -103,7 +113,11 @@ html, body, #root { height: 100%; }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background:
+    linear-gradient(var(--grid-line) 1px, transparent 1px) 0 0 / 34px 34px,
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px) 0 0 / 34px 34px,
+    radial-gradient(1100px 600px at 82% -8%, var(--glow), transparent 60%),
+    var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;
@@ -914,4 +928,147 @@ body {
   .floor { grid-template-columns: 1fr; height: auto; }
   .floor-stream { border-right: none; border-bottom: 1px solid var(--border); }
   .content.is-floor { padding: 16px; }
+}
+
+/* ===================================================================
+   Bento / Radar — the Ao Vivo screen as a glass bento grid.
+   All classes are bt- prefixed and/or scoped under .bento to avoid
+   collisions with the rest of the design system.
+   =================================================================== */
+.content.is-bento { padding: 20px; height: 100%; }
+.content.is-bento .content-inner { max-width: 1280px; height: 100%; }
+
+.bento {
+  display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px;
+  grid-template-rows: 132px 154px auto auto;
+  grid-template-areas:
+    "viz viz viz viz viz traf traf traf traf hero hero hero"
+    "viz viz viz viz viz chart chart chart chart hero hero hero"
+    "sess sess sess sess sess sess sess sess sess req req req"
+    "vendas vendas vendas vendas vendas criat criat criat criat req req req";
+}
+.bt-tile {
+  background: var(--surface-1); border: 1px solid var(--border); border-radius: 22px;
+  padding: 18px 20px; position: relative; overflow: hidden;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 50px -34px rgba(0, 0, 0, 0.9);
+}
+:root[data-theme="light"] .bt-tile { box-shadow: var(--shadow); }
+.bt-h { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+.bt-h .t { font-size: 13.5px; font-weight: 600; color: var(--text); letter-spacing: -0.01em; }
+.bt-h .t small { color: var(--text-faint); font-weight: 500; }
+.bt-kick { font-size: 10.5px; letter-spacing: 0.13em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+.bt-num { font-variant-numeric: tabular-nums; letter-spacing: -0.03em; }
+.bt-logs, .bt-link {
+  font: inherit; font-size: 12px; color: var(--text-muted); cursor: pointer;
+  background: var(--hover); border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
+}
+.bt-link { background: none; border: none; padding: 0; }
+.bt-logs:hover, .bt-link:hover { color: var(--text); }
+
+/* viz — Visitantes Ativos */
+.bt-viz { grid-area: viz; display: flex; flex-direction: column; }
+.bt-viz-top { display: flex; align-items: flex-start; justify-content: space-between; }
+.bt-big { font-size: 62px; font-weight: 700; line-height: 0.9; letter-spacing: -0.04em; display: flex; align-items: center; gap: 14px; }
+.bt-live { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; color: var(--live); font-weight: 500; }
+.bt-live .d { width: 9px; height: 9px; border-radius: 50%; background: var(--live); position: relative; }
+.bt-live .d::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 1.5px solid var(--live); animation: bt-pg 2.4s cubic-bezier(0, 0, 0.2, 1) infinite; }
+@keyframes bt-pg { 0% { transform: scale(0.55); opacity: 0.9; } 100% { transform: scale(2.4); opacity: 0; } }
+.bt-upd { font-size: 11.5px; color: var(--text-faint); font-family: var(--mono); }
+.bt-viz-chart { flex: 1; margin: 6px -6px 4px; min-height: 0; }
+.bt-viz-chart svg { width: 100%; height: 100%; display: block; }
+.bt-viz-foot { display: flex; gap: 34px; padding-top: 12px; border-top: 1px solid var(--border); }
+.bt-viz-foot .k { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+.bt-viz-foot .v { font-size: 22px; font-weight: 700; margin-top: 3px; }
+.bt-viz-foot .v.o { color: var(--accent); }
+
+/* traf — Dados de Tráfego */
+.bt-traf { grid-area: traf; }
+.bt-traf .row { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+.bt-traf .row .lab { font-size: 13px; color: var(--text-muted); }
+.bt-traf .row .val { font-family: var(--mono); font-size: 15px; font-weight: 600; }
+.bt-traf .row .val b { color: var(--text); }
+.bt-traf .row .val small { color: var(--text-faint); font-weight: 500; }
+.bt-uline { height: 4px; border-radius: 4px; margin-top: 8px; background: linear-gradient(90deg, var(--cyan), var(--pink)); }
+.bt-uline.g { background: var(--border); overflow: hidden; }
+.bt-uline.g > i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #6ee7ff, var(--cyan)); }
+
+/* hero — the bold colored tile (conversions) */
+.bt-hero { grid-area: hero; background: linear-gradient(150deg, var(--accent), #d1541c); border: none; color: #fff; display: flex; flex-direction: column; }
+:root[data-theme="light"] .bt-hero { color: #fff; }
+.bt-hero .ic { width: 30px; height: 30px; border-radius: 9px; background: rgba(255, 255, 255, 0.2); display: grid; place-items: center; }
+.bt-hero .big { font-size: 52px; font-weight: 750; letter-spacing: -0.03em; line-height: 1; margin-top: 10px; }
+.bt-hero .sub { font-size: 13px; color: rgba(255, 255, 255, 0.9); margin-top: 3px; font-weight: 500; }
+.bt-hero .bar { height: 7px; border-radius: 7px; background: rgba(255, 255, 255, 0.28); margin-top: auto; overflow: hidden; }
+.bt-hero .bar > i { display: block; height: 100%; background: #fff; border-radius: 7px; }
+.bt-hero .legend { display: flex; justify-content: space-between; gap: 12px; margin-top: 9px; font-size: 11px; color: rgba(255, 255, 255, 0.85); font-family: var(--mono); }
+
+/* chart — Visitantes por hora */
+.bt-chart { grid-area: chart; }
+.bt-chart svg { width: 100%; height: calc(100% - 34px); display: block; }
+.bt-chart .legend { position: absolute; left: 20px; bottom: 14px; display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); }
+.bt-chart .legend i { display: inline-block; width: 9px; height: 3px; border-radius: 3px; vertical-align: middle; margin-right: 5px; }
+
+/* req — Eventos ao Vivo */
+.bt-req { grid-area: req; display: flex; flex-direction: column; min-height: 0; }
+.bt-req .cnt { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; color: var(--live); font-family: var(--mono); }
+.bt-req .cnt .d { width: 8px; height: 8px; border-radius: 50%; background: var(--live); }
+.bt-req-list { display: flex; flex-direction: column; gap: 8px; overflow: hidden; margin-top: 2px; }
+.bt-req-row { display: grid; grid-template-columns: auto 1fr auto; gap: 11px; align-items: center; padding: 10px 11px; border-radius: 13px; background: var(--surface-2); border: 1px solid var(--border); animation: bt-rin 0.5s cubic-bezier(0.23, 1, 0.32, 1) both; }
+@keyframes bt-rin { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.bt-req-row .ic { width: 26px; height: 26px; border-radius: 8px; background: var(--hover); display: grid; place-items: center; color: var(--text-muted); flex: none; }
+.bt-req-row .ic.conv { background: var(--accent-soft); color: var(--accent); }
+.bt-req-row .m { min-width: 0; }
+.bt-req-row .m b { font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.bt-req-row .m b .fl { color: var(--text-faint); font-weight: 500; }
+.bt-req-row .m p { margin: 2px 0 0; font-size: 11px; color: var(--text-faint); font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-req-row .tm { font-size: 11px; color: var(--text-muted); font-family: var(--mono); white-space: nowrap; }
+
+/* sess — Gravações de Sessão */
+.bt-sess { grid-area: sess; }
+.bt-sess-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+.bt-scard { background: var(--surface-2); border: 1px solid var(--border); border-radius: 15px; padding: 13px 14px; display: flex; align-items: center; gap: 12px; text-align: left; cursor: pointer; font: inherit; color: var(--text); transition: border-color 0.15s, background 0.15s; }
+.bt-scard:hover { border-color: var(--border-strong); background: var(--surface-3); }
+.bt-scard.hot { border-color: var(--accent-ring); background: linear-gradient(100deg, var(--accent-soft), transparent 75%); }
+.bt-scard .sic { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; background: var(--hover); flex: none; color: var(--text-muted); }
+.bt-scard.hot .sic { background: var(--accent); color: #161616; }
+.bt-scard .sm { min-width: 0; }
+.bt-scard .sm b { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+.bt-scard .sm b .plat { font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+.bt-scard .sm p { margin: 4px 0 0; font-size: 11px; color: var(--text-muted); font-family: var(--mono); display: flex; gap: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-empty { grid-column: 1 / -1; color: var(--text-muted); font-size: 13px; padding: 22px 4px; text-align: center; }
+
+/* vendas — Conversões · comportamento */
+.bt-vendas { grid-area: vendas; }
+.bt-vgrid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px 20px; margin-top: 6px; }
+.bt-vgrid .k { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-faint); font-weight: 600; }
+.bt-vgrid .v { font-size: 26px; font-weight: 750; margin-top: 4px; letter-spacing: -0.02em; }
+.bt-vgrid .v.o { color: var(--accent); }
+
+/* criat — Top campanhas por conversão */
+.bt-criat { grid-area: criat; }
+.bt-crow { display: grid; grid-template-columns: 16px 1fr auto; gap: 12px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--border); }
+.bt-crow:last-child { border-bottom: none; }
+.bt-crow .rk { font-family: var(--mono); font-size: 12px; color: var(--text-faint); }
+.bt-crow .cb { min-width: 0; }
+.bt-crow .cb .r1 { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.bt-crow .cb .r1 .nm { font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bt-crow .cb .r1 .amt { font-family: var(--mono); font-size: 12.5px; color: var(--text-muted); white-space: nowrap; }
+.bt-crow .track { height: 6px; border-radius: 6px; background: var(--hover); overflow: hidden; }
+.bt-crow .fill { height: 100%; border-radius: 6px; background: linear-gradient(90deg, var(--accent), var(--gold-2)); }
+.bt-crow .sales { font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+
+@media (max-width: 1040px) {
+  .bento { display: flex; flex-direction: column; }
+  .bt-viz { min-height: 300px; }
+  .bt-hero { min-height: 190px; }
+  .bt-req-list { overflow: visible; }
+  .bt-sess-grid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 620px) {
+  .bt-sess-grid { grid-template-columns: 1fr; }
+  .bt-vgrid { grid-template-columns: repeat(2, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bt-live .d::after { animation: none; }
+  .bt-req-row { animation: none; }
 }

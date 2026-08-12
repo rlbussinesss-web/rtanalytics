@@ -146,10 +146,11 @@ function Dashboard({
         onLogout={onLogout}
       />
       <div className="main">
-        <div className={`content${view === "live" ? " is-floor" : ""}`}>
+        <div className={`content${view === "live" ? " is-bento" : ""}`}>
           <div className="content-inner">
             {view === "live" && (
               <AoVivo
+                siteId={siteId}
                 onlineCount={onlineCount}
                 sessions={sessions}
                 events={events}
