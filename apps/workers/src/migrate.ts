@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS events (
     payload     JSONB       NOT NULL DEFAULT '{}'::jsonb,
     country     TEXT,
     region      TEXT,
+    host        TEXT,
     city        TEXT,
     device      TEXT,
     browser     TEXT,
@@ -40,6 +41,7 @@ CREATE TABLE IF NOT EXISTS events (
 -- Backfill-safe: existing deployments created the table before these columns.
 ALTER TABLE events ADD COLUMN IF NOT EXISTS region TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS event_id TEXT;
+ALTER TABLE events ADD COLUMN IF NOT EXISTS host TEXT;
 
 -- Idempotency: the client generates a stable event_id per event. Because the
 -- Redis stream is at-least-once, an event can be redelivered (worker crash

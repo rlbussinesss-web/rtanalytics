@@ -59,6 +59,7 @@ export function AoVivo(p: Props) {
     return {
       sessionId,
       path,
+      host: info?.host,
       device: info?.device,
       hot: converted.has(sessionId) || HOT.test(path),
       since: sinceLabel(p.firstSeen.get(sessionId) ?? Date.now()),
@@ -131,7 +132,7 @@ export function AoVivo(p: Props) {
                 <span className={`ic${conv ? " conv" : ""}`}>{conv ? <Target size={13} /> : <CornerDownRight size={13} />}</span>
                 <div className="m">
                   <b>{eventLabel(e.eventType)} {e.country && <span className="fl">· {e.country}</span>}</b>
-                  <p>{e.path}</p>
+                  <p>{e.host ? e.host + e.path : e.path}</p>
                 </div>
                 <span className="tm">{new Date(e.timestamp).toLocaleTimeString()}</span>
               </div>
@@ -150,7 +151,7 @@ export function AoVivo(p: Props) {
               <span className="sic"><Play size={15} fill="currentColor" stroke="none" /></span>
               <div className="sm">
                 <b>Sessão {s.sessionId.slice(0, 4)} <span className="plat">{deviceLabel(s.device)}</span></b>
-                <p><span>◷ {s.since}</span><span>{s.path}</span></p>
+                <p><span>◷ {s.since}</span><span>{s.host ? s.host + s.path : s.path}</span></p>
               </div>
             </button>
           ))}

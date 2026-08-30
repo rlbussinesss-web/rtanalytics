@@ -25,6 +25,7 @@ export interface EventInsertRow {
   payload: Record<string, unknown>;
   country: string | null;
   region: string | null;
+  host: string | null;
   city: string | null;
   device: string | null;
   browser: string | null;
@@ -67,6 +68,7 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
     "payload",
     "country",
     "region",
+    "host",
     "city",
     "device",
     "browser",
@@ -92,6 +94,7 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
       JSON.stringify(row.payload),
       row.country,
       row.region,
+      row.host,
       row.city,
       row.device,
       row.browser,

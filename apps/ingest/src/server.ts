@@ -128,7 +128,12 @@ app.register(async (fastify) => {
 
     // IP and User-Agent are constant for a connection, so enrich once here
     // rather than on every event.
-    const enrichment = enrichFromConnection(req.ip, req.headers["user-agent"]);
+    const enrichment = enrichFromConnection(
+      req.ip,
+      req.headers["user-agent"],
+      req.headers["origin"] as string | undefined,
+      req.headers["referer"] as string | undefined
+    );
 
     socket.on("message", (raw: Buffer) => {
       void handleMessage(socket, raw, enrichment, (id) => {

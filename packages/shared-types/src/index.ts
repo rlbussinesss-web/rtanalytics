@@ -203,6 +203,8 @@ export interface EnrichedFields {
   device?: string;
   browser?: string;
   os?: string;
+  /** The page's own domain, derived from the connection's Origin/Referer. */
+  host?: string;
 }
 
 export type EnrichedEvent = TrackerEvent & EnrichedFields;

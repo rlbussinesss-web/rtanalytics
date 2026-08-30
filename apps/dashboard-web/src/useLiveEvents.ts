@@ -15,6 +15,8 @@ export interface LiveEvent {
   device?: string;
   browser?: string;
   os?: string;
+  /** The page's own domain, derived server-side from the connection. */
+  host?: string;
 }
 
 import { WS_BASE_URL, getToken } from "./token";

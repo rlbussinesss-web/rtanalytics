@@ -17,8 +17,32 @@ import type { EnrichedFields } from "@rtanalytics/shared-types";
  * constant for a socket) rather than per event.
  */
 
-export function enrichFromConnection(ip: string | undefined, userAgent: string | undefined): EnrichedFields {
-  return { ...geoFromIp(ip), ...deviceFromUserAgent(userAgent) };
+export function enrichFromConnection(
+  ip: string | undefined,
+  userAgent: string | undefined,
+  origin?: string | undefined,
+  referer?: string | undefined
+): EnrichedFields {
+  return { ...geoFromIp(ip), ...deviceFromUserAgent(userAgent), ...hostFromHeaders(origin, referer) };
+}
+
+/**
+ * The page's own domain, taken from the WebSocket handshake's Origin header
+ * (falling back to Referer). Derived server-side, not from the tracker, so it
+ * reflects where the script actually runs and can't be faked by the payload —
+ * which matters when one tracking key is used across several domains.
+ */
+function hostFromHeaders(origin?: string, referer?: string): Pick<EnrichedFields, "host"> {
+  for (const raw of [origin, referer]) {
+    if (!raw) continue;
+    try {
+      const host = new URL(raw).hostname;
+      if (host) return { host };
+    } catch {
+      /* not a valid URL — try the next candidate */
+    }
+  }
+  return {};
 }
 
 function geoFromIp(ip: string | undefined): Pick<EnrichedFields, "country" | "region" | "city"> {
