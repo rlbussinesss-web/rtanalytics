@@ -134,6 +134,49 @@ export const visibilitySchema = z.object({
   }),
 });
 
+export const viewportSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("viewport"),
+  payload: z.object({
+    samples: z
+      .array(
+        z.object({
+          t: z.number().int().nonnegative(),
+          y: z.number().int().nonnegative(),
+          h: z.number().int().nonnegative(),
+        })
+      )
+      .max(120),
+  }),
+});
+
+/**
+ * The page's content mapped to vertical position. `blocks` is capped because
+ * this is a description of a page, not a copy of it — an unbounded map would
+ * let one enormous page dominate ingestion.
+ */
+export const pageMapSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("page-map"),
+  payload: z.object({
+    structureHash: z.string().min(1).max(32),
+    height: z.number().int().nonnegative(),
+    width: z.number().int().nonnegative(),
+    blocks: z
+      .array(
+        z.object({
+          y: z.number().int(),
+          h: z.number().int().nonnegative(),
+          tag: z.string().max(20),
+          id: z.string().max(120).optional(),
+          text: z.string().max(200).optional(),
+          input: z.boolean().optional(),
+        })
+      )
+      .max(200),
+  }),
+});
+
 /** Discriminated union covering every event type the ingest server accepts. */
 export const trackerEventSchema = z.discriminatedUnion("eventType", [
   pageviewSchema,
@@ -145,6 +188,8 @@ export const trackerEventSchema = z.discriminatedUnion("eventType", [
   replayChunkSchema,
   conversionSchema,
   visibilitySchema,
+  viewportSchema,
+  pageMapSchema,
 ]);
 
 export type PageviewEvent = z.infer<typeof pageviewSchema>;

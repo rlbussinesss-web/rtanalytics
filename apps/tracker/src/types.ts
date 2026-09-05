@@ -17,7 +17,9 @@ export type EventType =
   | "error"
   | "replay-chunk"
   | "conversion"
-  | "visibility";
+  | "visibility"
+  | "viewport"
+  | "page-map";
 
 export interface BaseEvent {
   schemaVersion: typeof SCHEMA_VERSION;
@@ -68,6 +70,23 @@ export type VisibilityEvent = TrackerEventEnvelope<
   { state: "hidden" | "visible" | "left" }
 >;
 
+/** Where the viewport sat over time — position as a function of time. */
+export type ViewportEvent = TrackerEventEnvelope<
+  "viewport",
+  { samples: { t: number; y: number; h: number }[] }
+>;
+
+/** The page's content mapped to vertical position, sent per page version. */
+export type PageMapEvent = TrackerEventEnvelope<
+  "page-map",
+  {
+    structureHash: string;
+    height: number;
+    width: number;
+    blocks: { y: number; h: number; tag: string; id?: string; text?: string; input?: boolean }[];
+  }
+>;
+
 export type AnyTrackerEvent =
   | PageviewEvent
   | HeartbeatEvent
@@ -75,4 +94,6 @@ export type AnyTrackerEvent =
   | ScrollEvent
   | ReplayChunkEvent
   | ConversionEvent
-  | VisibilityEvent;
+  | VisibilityEvent
+  | ViewportEvent
+  | PageMapEvent;

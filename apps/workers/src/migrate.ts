@@ -78,6 +78,24 @@ CREATE TABLE IF NOT EXISTS replay_chunks (
 CREATE INDEX IF NOT EXISTS idx_replay_session ON replay_chunks (site_id, session_id, seq);
 CREATE INDEX IF NOT EXISTS idx_replay_time ON replay_chunks (site_id, time DESC);
 
+-- Content of one version of a page, mapped to vertical position. Keyed by
+-- version rather than by session: the content is the same for everyone who saw
+-- that version, so thousands of sessions reuse a single row. This is what lets
+-- a scroll position be translated into what was actually on screen.
+CREATE TABLE IF NOT EXISTS page_maps (
+    site_id        TEXT        NOT NULL,
+    path           TEXT        NOT NULL,
+    structure_hash TEXT        NOT NULL,
+    height         INTEGER     NOT NULL,
+    width          INTEGER     NOT NULL,
+    blocks         JSONB       NOT NULL,
+    first_seen     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (site_id, path, structure_hash)
+);
+
+CREATE INDEX IF NOT EXISTS idx_page_maps_recent ON page_maps (site_id, path, last_seen DESC);
+
 -- Per-session curation: favorite flag and free-form tags, set from the
 -- dashboard. Separate from event data so it can be updated without touching
 -- the immutable event log.

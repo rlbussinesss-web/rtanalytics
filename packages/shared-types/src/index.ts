@@ -23,7 +23,9 @@ export type EventType =
   | "error"
   | "replay-chunk"
   | "conversion"
-  | "visibility";
+  | "visibility"
+  | "viewport"
+  | "page-map";
 
 /** Fields common to every event envelope, regardless of type. */
 export interface BaseEvent {
@@ -183,6 +185,55 @@ export interface VisibilityEvent extends BaseEvent {
   payload: VisibilityPayload;
 }
 
+/** One sample of where the viewport was, relative to the session start. */
+export interface ViewportSample {
+  /** Milliseconds since the tracker started on this page. */
+  t: number;
+  /** Scroll offset in CSS pixels. */
+  y: number;
+  /** Viewport height, so the visible range is y..y+h. */
+  h: number;
+}
+
+export interface ViewportPayload {
+  samples: ViewportSample[];
+}
+
+export interface ViewportEvent extends BaseEvent {
+  eventType: "viewport";
+  payload: ViewportPayload;
+}
+
+/** A block of page content and where it sits vertically. */
+export interface PageBlock {
+  y: number;
+  h: number;
+  tag: string;
+  id?: string;
+  text?: string;
+  /** True when the block asks the visitor for something (a form field). */
+  input?: boolean;
+}
+
+/**
+ * The content of one version of a page, mapped to vertical position.
+ *
+ * Sent per page version rather than per session: the content is identical for
+ * everyone who sees that version, so one capture serves thousands of sessions.
+ * This is what lets a scroll position be translated into what was on screen.
+ */
+export interface PageMapPayload {
+  structureHash: string;
+  height: number;
+  width: number;
+  blocks: PageBlock[];
+}
+
+export interface PageMapEvent extends BaseEvent {
+  eventType: "page-map";
+  payload: PageMapPayload;
+}
+
 /** Commands the server pushes down to a connected tracker. */
 export type TrackerCommand =
   | { type: "start-recording" }
@@ -198,7 +249,9 @@ export type TrackerEvent =
   | ErrorEvent
   | ReplayChunkEvent
   | ConversionEvent
-  | VisibilityEvent;
+  | VisibilityEvent
+  | ViewportEvent
+  | PageMapEvent;
 
 /** Enriched fields that ingest attaches server-side before persistence/broadcast. */
 export interface EnrichedFields {

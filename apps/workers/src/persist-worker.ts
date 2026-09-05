@@ -9,7 +9,7 @@
  * marginally; losing one is worse).
  */
 import { Redis } from "ioredis";
-import { insertEventsBatch, type EventInsertRow } from "./db.js";
+import { insertEventsBatch, upsertPageMap, type EventInsertRow } from "./db.js";
 import { runMigrations } from "./migrate.js";
 import { runReplayConsumer } from "./replay-consumer.js";
 import { runAlertsWorker } from "./alerts-worker.js";
@@ -140,7 +140,32 @@ async function main(): Promise<void> {
         try {
           const payloadIndex = fields.indexOf("payload");
           if (payloadIndex === -1) throw new Error("missing payload field");
-          batch.push({ id, row: toRow(fields[payloadIndex + 1]!) });
+          const json = fields[payloadIndex + 1]!;
+
+          // A page map describes a page version, not a moment in a session, so
+          // it belongs in its own table rather than in the event log — where it
+          // would be a large duplicated blob on every re-send.
+          const parsed = JSON.parse(json) as Record<string, unknown>;
+          if (parsed.eventType === "page-map") {
+            const p = parsed.payload as {
+              structureHash: string;
+              height: number;
+              width: number;
+              blocks: unknown;
+            };
+            await upsertPageMap({
+              siteId: String(parsed.siteId),
+              path: String(parsed.path ?? ""),
+              structureHash: p.structureHash,
+              height: p.height,
+              width: p.width,
+              blocks: p.blocks,
+            });
+            await redis.xack(STREAM, GROUP, id);
+            continue;
+          }
+
+          batch.push({ id, row: toRow(json) });
         } catch (err) {
           console.error("[persist-worker] malformed entry, acking to unblock", id, err);
           await redis.xack(STREAM, GROUP, id);

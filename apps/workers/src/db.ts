@@ -149,3 +149,29 @@ export async function insertReplayChunks(rows: ReplayChunkRow[]): Promise<void> 
   const sql = `INSERT INTO replay_chunks (site_id, session_id, seq, frames, time) VALUES ${placeholders.join(", ")}`;
   await getPool().query(sql, values);
 }
+
+export interface PageMapRow {
+  siteId: string;
+  path: string;
+  structureHash: string;
+  height: number;
+  width: number;
+  blocks: unknown;
+}
+
+/**
+ * Stores one version of a page's content map.
+ *
+ * Re-sends of a version it already has only refresh last_seen — the content is
+ * by definition identical, so rewriting the blocks would be churn. last_seen is
+ * what tells the analyses which version is current.
+ */
+export async function upsertPageMap(row: PageMapRow): Promise<void> {
+  await getPool().query(
+    `INSERT INTO page_maps (site_id, path, structure_hash, height, width, blocks)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (site_id, path, structure_hash)
+     DO UPDATE SET last_seen = now()`,
+    [row.siteId, row.path, row.structureHash, row.height, row.width, JSON.stringify(row.blocks)]
+  );
+}

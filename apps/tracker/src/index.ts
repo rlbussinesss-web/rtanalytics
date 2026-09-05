@@ -5,6 +5,7 @@ import { Transport } from "./transport";
 import { Recorder } from "./recorder";
 import { installBehavior } from "./behavior";
 import { collectAttributes } from "./attributes";
+import { buildPageMap, shouldSendMap } from "./pagemap";
 
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
@@ -94,6 +95,32 @@ class RTATracker {
       path: location.pathname + location.search,
       referrer: document.referrer || undefined,
     };
+  }
+
+  /**
+   * Sends the page's content map, if this version hasn't been mapped recently.
+   *
+   * Deferred rather than measured immediately: positions taken before images,
+   * fonts and late-rendered blocks settle would describe a page that no visitor
+   * ever saw, and every analysis built on it would point at the wrong content.
+   */
+  private trackPageMap(): void {
+    const send = () => {
+      try {
+        const map = buildPageMap();
+        if (!map) return;
+        if (!shouldSendMap(location.pathname, map.structureHash)) return;
+        this.transport.send({
+          ...this.baseEnvelope(),
+          eventType: "page-map",
+          payload: map,
+        } as AnyTrackerEvent);
+      } catch {
+        /* mapping is best-effort and must never break the host page */
+      }
+    };
+    if (document.readyState === "complete") setTimeout(send, 1500);
+    else window.addEventListener("load", () => setTimeout(send, 1500), { once: true });
   }
 
   private trackPageview(): void {
@@ -188,6 +215,7 @@ class RTATracker {
 
     this.transport.connect();
     this.trackPageview();
+    this.trackPageMap();
     this.checkConversionPaths();
     setInterval(() => this.trackHeartbeat(), HEARTBEAT_INTERVAL_MS);
 

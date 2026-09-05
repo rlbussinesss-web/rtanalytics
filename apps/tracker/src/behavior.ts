@@ -18,6 +18,7 @@ const DEAD_WINDOW_MS = 1200;
 export function installBehavior(emit: Emit): void {
   installClicks(emit);
   installScroll(emit);
+  installViewportTrail(emit);
   installErrors(emit);
   installVitals(emit);
   installVisibility(emit);
@@ -173,6 +174,64 @@ function installScroll(emit: Emit): void {
     },
     { passive: true }
   );
+}
+
+// ------------------------------------------------------- viewport trail
+/**
+ * Where the visitor was on the page, over time.
+ *
+ * The scroll signal above is a ratchet — it only ever reports a new deepest
+ * point — which answers "how far did they get" and nothing else. It cannot say
+ * where someone was at second 12, that they scrolled back up to re-read the
+ * price, or where they were sitting when they left. Both the abandonment
+ * autopsy and the collective replay need position as a function of time.
+ *
+ * Samples are batched rather than sent individually: a sample per second on a
+ * two-minute session would be 120 events, and the same information fits in a
+ * handful of messages.
+ */
+const TRAIL_SAMPLE_MS = 1000;
+const TRAIL_FLUSH_MS = 5000;
+const TRAIL_MAX_SAMPLES = 60;
+
+function installViewportTrail(emit: Emit): void {
+  const startedAt = Date.now();
+  let samples: { t: number; y: number; h: number }[] = [];
+  let lastY = -1;
+
+  const sample = () => {
+    const y = Math.round(window.scrollY);
+    const h = Math.round(window.innerHeight);
+    // Only record movement; a visitor reading motionless is captured by the
+    // gap between samples, not by repeating the same row over and over.
+    if (y === lastY && samples.length > 0) return;
+    lastY = y;
+    samples.push({ t: Date.now() - startedAt, y, h });
+    if (samples.length >= TRAIL_MAX_SAMPLES) flush();
+  };
+
+  const flush = () => {
+    if (samples.length === 0) return;
+    emit("viewport", { samples });
+    samples = [];
+  };
+
+  sample();
+  setInterval(sample, TRAIL_SAMPLE_MS);
+  setInterval(flush, TRAIL_FLUSH_MS);
+
+  // The last position before leaving is the most valuable sample of all — it is
+  // where the visitor gave up — so it is never left sitting in the buffer.
+  window.addEventListener("pagehide", () => {
+    sample();
+    flush();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") {
+      sample();
+      flush();
+    }
+  });
 }
 
 // --------------------------------------------------------------- errors
