@@ -44,6 +44,7 @@ function toRow(payloadJson: string): EventInsertRow {
     country: (data.country as string) ?? null,
     region: (data.region as string) ?? null,
     host: (data.host as string) ?? null,
+    isBot: data.isBot === true,
     city: (data.city as string) ?? null,
     device: (data.device as string) ?? null,
     browser: (data.browser as string) ?? null,

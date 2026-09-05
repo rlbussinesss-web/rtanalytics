@@ -30,6 +30,7 @@ CREATE TABLE IF NOT EXISTS events (
     country     TEXT,
     region      TEXT,
     host        TEXT,
+    is_bot      BOOLEAN,
     city        TEXT,
     device      TEXT,
     browser     TEXT,
@@ -42,6 +43,10 @@ CREATE TABLE IF NOT EXISTS events (
 ALTER TABLE events ADD COLUMN IF NOT EXISTS region TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS event_id TEXT;
 ALTER TABLE events ADD COLUMN IF NOT EXISTS host TEXT;
+-- Nullable on purpose: adding a NOT NULL column to a compressed hypertable
+-- can fail, and rows written before this column existed have no verdict.
+-- Queries read it as IS NOT TRUE, so unknown counts as human.
+ALTER TABLE events ADD COLUMN IF NOT EXISTS is_bot BOOLEAN;
 
 -- Idempotency: the client generates a stable event_id per event. Because the
 -- Redis stream is at-least-once, an event can be redelivered (worker crash
@@ -57,6 +62,7 @@ CREATE INDEX IF NOT EXISTS idx_events_site_time ON events (site_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events (session_id, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_type ON events (event_type, time DESC);
 CREATE INDEX IF NOT EXISTS idx_events_payload_gin ON events USING GIN (payload);
+CREATE INDEX IF NOT EXISTS idx_events_human ON events (site_id, time DESC) WHERE is_bot IS NOT TRUE;
 
 -- Recorded replay frames: one row per chunk. Kept separate from events
 -- because frames are bulky and only read when replaying a specific session.

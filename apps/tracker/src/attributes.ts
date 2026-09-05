@@ -29,6 +29,10 @@ export function collectAttributes(): Record<string, unknown> {
     /* ignore */
   }
 
+  // Automation tell: a driven browser sets navigator.webdriver. Sent so the
+  // server can classify the visit as a bot and keep it out of the metrics.
+  if (navigator.webdriver === true) attrs.wd = true;
+
   // Connection + hardware — network quality and device tier.
   const conn = (navigator as unknown as { connection?: { effectiveType?: string } }).connection;
   if (conn?.effectiveType) attrs.conn = conn.effectiveType;

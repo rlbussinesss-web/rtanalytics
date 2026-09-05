@@ -26,11 +26,31 @@ export interface EventInsertRow {
   country: string | null;
   region: string | null;
   host: string | null;
+  isBot: boolean;
   city: string | null;
   device: string | null;
   browser: string | null;
   os: string | null;
   time: Date;
+}
+
+/**
+ * Collapses duplicate rows within one batch, keyed by (event_id, time).
+ *
+ * A redelivery can land in the same flush as the original, and a single INSERT
+ * conflicting with itself is fragile; removing them here keeps the statement
+ * clean and smaller. Rows with no event_id can't be identified, so they always
+ * pass through rather than being silently merged.
+ */
+export function dedupeRows<T extends { eventId: string; time: Date }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  return rows.filter((r) => {
+    if (!r.eventId) return true;
+    const key = `${r.eventId}|${r.time.getTime()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 /**
@@ -46,17 +66,7 @@ export interface EventInsertRow {
 export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
   if (rows.length === 0) return;
 
-  // Collapse intra-batch duplicates so the single statement can't conflict with
-  // itself (and to keep the payload small). Rows without an event_id can't be
-  // deduped, so they always pass through.
-  const seen = new Set<string>();
-  const deduped = rows.filter((r) => {
-    if (!r.eventId) return true;
-    const key = `${r.eventId}|${r.time.getTime()}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const deduped = dedupeRows(rows);
 
   const columns = [
     "event_id",
@@ -69,6 +79,7 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
     "country",
     "region",
     "host",
+    "is_bot",
     "city",
     "device",
     "browser",
@@ -95,6 +106,7 @@ export async function insertEventsBatch(rows: EventInsertRow[]): Promise<void> {
       row.country,
       row.region,
       row.host,
+      row.isBot,
       row.city,
       row.device,
       row.browser,

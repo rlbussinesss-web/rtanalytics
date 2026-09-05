@@ -67,7 +67,7 @@ async function segmentBy(siteId: string, since: string, valueExpr: string): Prom
                 bool_or(event_type = 'conversion') AS converted,
                 sum((payload->>'value')::float) FILTER (WHERE event_type = 'conversion') AS sess_value
            FROM events
-          WHERE site_id = $1 AND time >= ${since}
+          WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
           GROUP BY session_id
        ) s
       WHERE val IS NOT NULL AND val <> ''

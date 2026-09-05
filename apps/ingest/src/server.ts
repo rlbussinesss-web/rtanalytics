@@ -38,6 +38,32 @@ function isSiteAllowed(siteId: string): boolean {
  */
 const SERVER_INGEST_KEY = process.env.SERVER_INGEST_KEY ?? "";
 
+/**
+ * Per-connection message budget.
+ *
+ * The endpoint is public, so one misbehaving page (a runaway loop firing
+ * events) or a deliberate flood could both cost money and skew the numbers.
+ * A refilling budget lets normal bursts through — a page load emits a handful
+ * of events at once — while capping sustained throughput per socket.
+ */
+const RATE_BURST = Number(process.env.INGEST_RATE_BURST ?? 120);
+const RATE_PER_SECOND = Number(process.env.INGEST_RATE_PER_SECOND ?? 20);
+
+class RateBudget {
+  private tokens = RATE_BURST;
+  private last = Date.now();
+
+  /** Consumes one message; false means the sender is over budget. */
+  take(): boolean {
+    const now = Date.now();
+    this.tokens = Math.min(RATE_BURST, this.tokens + ((now - this.last) / 1000) * RATE_PER_SECOND);
+    this.last = now;
+    if (this.tokens < 1) return false;
+    this.tokens -= 1;
+    return true;
+  }
+}
+
 function validServerKey(candidate: unknown): boolean {
   if (!SERVER_INGEST_KEY || typeof candidate !== "string") return false;
   const a = Buffer.from(candidate);
@@ -135,7 +161,15 @@ app.register(async (fastify) => {
       req.headers["referer"] as string | undefined
     );
 
+    const budget = new RateBudget();
+
     socket.on("message", (raw: Buffer) => {
+      if (!budget.take()) {
+        // Dropped rather than disconnected: a legitimate page that briefly
+        // overshoots keeps its socket (and its queued events) alive.
+        sendError(socket, "rate_limited");
+        return;
+      }
       void handleMessage(socket, raw, enrichment, (id) => {
         if (sessionId !== id) {
           sessionId = id;
@@ -170,18 +204,31 @@ async function handleMessage(
 
   const result = parseTrackerEvent(parsedJson);
   if (!result.success) {
-    sendError(socket, `validation_error: ${result.error}`);
+    const rawId = (parsedJson as { eventId?: unknown } | null)?.eventId;
+    sendError(
+      socket,
+      `validation_error: ${result.error}`,
+      typeof rawId === "string" ? rawId : undefined
+    );
     return;
   }
 
   const event = result.data;
 
   if (!isSiteAllowed(event.siteId)) {
-    sendError(socket, "unknown_site");
+    sendError(socket, "unknown_site", event.eventId);
     return;
   }
 
   onSessionKnown(event.sessionId);
+
+  // A driven browser reports navigator.webdriver on its pageview. The user
+  // agent alone can look perfectly human, so this upgrades the verdict for
+  // the rest of the connection once the client admits automation.
+  if (event.eventType === "pageview" && event.payload.wd === true && !enrichment.isBot) {
+    enrichment.isBot = true;
+    enrichment.botReason = "webdriver";
+  }
 
   // Replay frames take a different path: they are high-volume, only useful to
   // whoever is watching right now, and would drown both the event log and the
@@ -222,7 +269,7 @@ async function handleMessage(
     ]);
   } catch (err) {
     app.log.error({ err }, "failed to process event");
-    sendError(socket, "processing_error");
+    sendError(socket, "processing_error", event.eventId);
     return;
   }
 
@@ -231,9 +278,14 @@ async function handleMessage(
   }
 }
 
-function sendError(socket: WebSocket, message: string): void {
+/**
+ * Rejects one event. The eventId is echoed whenever it is known so the client
+ * can drop that event instead of retrying it forever — a malformed event is
+ * never going to become valid, and without the id it would block the queue.
+ */
+function sendError(socket: WebSocket, message: string, eventId?: string): void {
   if (socket.readyState === socket.OPEN) {
-    socket.send(JSON.stringify({ type: "error", message }));
+    socket.send(JSON.stringify({ type: "error", message, eventId }));
   }
 }
 

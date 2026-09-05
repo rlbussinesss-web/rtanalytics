@@ -50,7 +50,7 @@ export async function computeHeatmap(
               coalesce((payload->>'rage')::boolean, false) AS rage,
               coalesce((payload->>'dead')::boolean, false) AS dead
          FROM events
-        WHERE site_id = $1 AND event_type = 'click' AND time >= ${since} ${pathFilter}
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND event_type = 'click' AND time >= ${since} ${pathFilter}
               AND payload ? 'x'
         LIMIT 8000`,
       params
@@ -61,7 +61,7 @@ export async function computeHeatmap(
               count(*) FILTER (WHERE (payload->>'rage')::boolean)::int AS rage,
               count(*) FILTER (WHERE (payload->>'dead')::boolean)::int AS dead
          FROM events
-        WHERE site_id = $1 AND event_type = 'click' AND time >= ${since} ${pathFilter}
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND event_type = 'click' AND time >= ${since} ${pathFilter}
               AND coalesce(payload->>'target','') <> ''
         GROUP BY 1 ORDER BY count DESC LIMIT 15`,
       params
@@ -69,7 +69,7 @@ export async function computeHeatmap(
     query<{ d: string }>(
       `SELECT max((payload->>'depthPct')::float) AS d
          FROM events
-        WHERE site_id = $1 AND event_type = 'scroll' AND time >= ${since} ${pathFilter}
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND event_type = 'scroll' AND time >= ${since} ${pathFilter}
         GROUP BY session_id`,
       params
     ),

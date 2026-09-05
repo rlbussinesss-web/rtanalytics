@@ -30,6 +30,9 @@ export interface Metrics {
   pagesPerSession: number;
   newVisitors: number;
   returningVisitors: number;
+  /** Crawler/automation traffic kept out of every number above. */
+  botSessions: number;
+  botEvents: number;
   // Behaviour insights (share of sessions unless noted).
   rageClickRate: number;
   deadClickRate: number;
@@ -78,7 +81,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     query<{ label: string; count: string }>(
       `SELECT ${column} AS label, count(DISTINCT session_id)::int AS count
          FROM events
-        WHERE site_id = $1 AND time >= ${since} AND ${column} IS NOT NULL AND ${column} <> ''
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since} AND ${column} IS NOT NULL AND ${column} <> ''
         GROUP BY ${column}
         ORDER BY count DESC
         LIMIT 8`,
@@ -99,6 +102,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     behavior,
     scrollDepth,
     vitals,
+    bots,
   ] = await Promise.all([
     query<{
       visitors: string;
@@ -114,7 +118,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
           count(*)::int AS events,
           count(DISTINCT session_id) FILTER (WHERE event_type = 'conversion')::int AS conversions
         FROM events
-        WHERE site_id = $1 AND time >= ${since}`,
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}`,
       [siteId]
     ),
     // Longest heartbeat per session carries the session length; average those.
@@ -122,7 +126,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
       `SELECT avg(max_dur)::float AS avg FROM (
           SELECT session_id, max((payload->>'sessionDurationSec')::float) AS max_dur
             FROM events
-           WHERE site_id = $1 AND time >= ${since} AND event_type = 'heartbeat'
+           WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since} AND event_type = 'heartbeat'
            GROUP BY session_id
         ) s`,
       [siteId]
@@ -138,7 +142,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
                  count(*) FILTER (WHERE event_type = 'pageview') AS pv,
                  count(*) FILTER (WHERE event_type IN ('click','scroll')) AS interactions
             FROM events
-           WHERE site_id = $1 AND time >= ${since}
+           WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
            GROUP BY session_id
         ) s`,
       [siteId]
@@ -147,7 +151,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
       `SELECT date_trunc('${bucket}', time) AS bucket,
               count(DISTINCT visitor_id)::int AS visitors
          FROM events
-        WHERE site_id = $1 AND time >= ${since}
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
         GROUP BY 1
         ORDER BY 1`,
       [siteId]
@@ -155,7 +159,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     query<{ label: string; count: string }>(
       `SELECT path AS label, count(*)::int AS count
          FROM events
-        WHERE site_id = $1 AND time >= ${since} AND event_type = 'pageview'
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since} AND event_type = 'pageview'
         GROUP BY path ORDER BY count DESC LIMIT 8`,
       [siteId]
     ),
@@ -166,7 +170,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
       `SELECT coalesce(nullif(payload->>'referrer',''), '(direto)') AS label,
               count(DISTINCT session_id)::int AS count
          FROM events
-        WHERE site_id = $1 AND time >= ${since} AND event_type = 'pageview'
+        WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since} AND event_type = 'pageview'
         GROUP BY 1 ORDER BY count DESC LIMIT 8`,
       [siteId]
     ),
@@ -180,7 +184,7 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
         FROM (
           SELECT visitor_id, min(time) AS first_seen
             FROM events
-           WHERE site_id = $1
+           WHERE site_id = $1 AND is_bot IS NOT TRUE
            GROUP BY visitor_id
           HAVING max(time) >= ${since}
         ) v`,
@@ -193,14 +197,14 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
           count(DISTINCT session_id) FILTER (WHERE event_type='click' AND (payload->>'dead')::boolean)::int AS dead,
           count(DISTINCT session_id) FILTER (WHERE event_type='error')::int AS err_sessions,
           count(*) FILTER (WHERE event_type='error')::int AS err_count
-        FROM events WHERE site_id = $1 AND time >= ${since}`,
+        FROM events WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}`,
       [siteId]
     ),
     // Average of each session's deepest scroll.
     query<{ avg: string | null }>(
       `SELECT avg(maxd)::float AS avg FROM (
           SELECT session_id, max((payload->>'depthPct')::float) AS maxd
-            FROM events WHERE site_id = $1 AND time >= ${since} AND event_type = 'scroll'
+            FROM events WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since} AND event_type = 'scroll'
             GROUP BY session_id
         ) s`,
       [siteId]
@@ -209,8 +213,18 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     query<{ name: string; p75: string }>(
       `SELECT name, percentile_cont(0.75) WITHIN GROUP (ORDER BY val) AS p75 FROM (
           SELECT payload->>'name' AS name, (payload->>'value')::float AS val
-            FROM events WHERE site_id = $1 AND time >= ${since} AND event_type = 'web-vitals'
+            FROM events WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since} AND event_type = 'web-vitals'
         ) v GROUP BY name`,
+      [siteId]
+    ),
+    // Bot traffic that every other query above excluded. Reported rather than
+    // hidden, so the filtering is visible and auditable instead of silent.
+    query<{ sessions: string; events: string }>(
+      `SELECT
+          count(DISTINCT session_id)::int AS sessions,
+          count(*)::int AS events
+        FROM events
+        WHERE site_id = $1 AND is_bot = true AND time >= ${since}`,
       [siteId]
     ),
   ]);
@@ -244,6 +258,8 @@ export async function computeMetrics(siteId: string, range: RangeKey): Promise<M
     pagesPerSession: sessionsCount > 0 ? Number(t.pageviews) / sessionsCount : 0,
     newVisitors: Number(mix.new_visitors),
     returningVisitors: Number(mix.returning),
+    botSessions: Number(bots[0]?.sessions ?? 0),
+    botEvents: Number(bots[0]?.events ?? 0),
     rageClickRate: sessionsCount > 0 ? Number(bh.rage) / sessionsCount : 0,
     deadClickRate: sessionsCount > 0 ? Number(bh.dead) / sessionsCount : 0,
     errorRate: sessionsCount > 0 ? Number(bh.err_sessions) / sessionsCount : 0,

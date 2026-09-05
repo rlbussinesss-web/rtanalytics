@@ -1,6 +1,7 @@
 import geoip from "geoip-lite";
 import { UAParser } from "ua-parser-js";
 import type { EnrichedFields } from "@rtanalytics/shared-types";
+import { classifyBot } from "./bots.js";
 
 /**
  * Server-side enrichment: turns the connection's IP and User-Agent into
@@ -23,7 +24,14 @@ export function enrichFromConnection(
   origin?: string | undefined,
   referer?: string | undefined
 ): EnrichedFields {
-  return { ...geoFromIp(ip), ...deviceFromUserAgent(userAgent), ...hostFromHeaders(origin, referer) };
+  const bot = classifyBot(userAgent);
+  return {
+    ...geoFromIp(ip),
+    ...deviceFromUserAgent(userAgent),
+    ...hostFromHeaders(origin, referer),
+    isBot: bot.isBot,
+    ...(bot.reason ? { botReason: bot.reason } : {}),
+  };
 }
 
 /**

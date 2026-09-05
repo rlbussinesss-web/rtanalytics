@@ -56,6 +56,8 @@ export interface PageviewPayload {
   conn?: string;
   mem?: number;
   cores?: number;
+  /** navigator.webdriver — the browser admitting it is automated. */
+  wd?: boolean;
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
@@ -205,6 +207,10 @@ export interface EnrichedFields {
   os?: string;
   /** The page's own domain, derived from the connection's Origin/Referer. */
   host?: string;
+  /** True when the connection was classified as a crawler/automation tool. */
+  isBot?: boolean;
+  /** Why it was classified as a bot, for auditing false positives. */
+  botReason?: string;
 }
 
 export type EnrichedEvent = TrackerEvent & EnrichedFields;

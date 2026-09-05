@@ -33,6 +33,7 @@ export const pageviewSchema = z.object({
     conn: z.string().max(16).optional(),
     mem: z.number().nonnegative().optional(),
     cores: z.number().int().nonnegative().optional(),
+    wd: z.boolean().optional(),
     // Acquisition: campaign + ad click ids from the landing URL.
     utm_source: z.string().max(200).optional(),
     utm_medium: z.string().max(200).optional(),

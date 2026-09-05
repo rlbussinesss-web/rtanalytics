@@ -47,13 +47,13 @@ async function sessionsForStep(
     step.kind === "event"
       ? await query<{ session_id: string }>(
           `SELECT DISTINCT session_id FROM events
-            WHERE site_id = $1 AND time >= ${since}
+            WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
               AND event_type = 'conversion' AND payload->>'name' = $2`,
           [siteId, step.value]
         )
       : await query<{ session_id: string }>(
           `SELECT DISTINCT session_id FROM events
-            WHERE site_id = $1 AND time >= ${since}
+            WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
               AND event_type = 'pageview' AND path = $2`,
           [siteId, step.value]
         );
