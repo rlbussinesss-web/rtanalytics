@@ -182,12 +182,7 @@ function Dashboard({
               <AudiencePanel siteId={siteId} range={range} onRangeChange={setRange} />
             )}
             {view === "autopsy" && (
-              <AutopsyPanel
-                siteId={siteId}
-                range={range}
-                onRangeChange={setRange}
-                onWatch={setWatching}
-              />
+              <AutopsyPanel siteId={siteId} range={range} onRangeChange={setRange} />
             )}
             {view === "heatmaps" && (
               <>

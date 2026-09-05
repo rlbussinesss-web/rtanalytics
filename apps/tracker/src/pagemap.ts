@@ -116,7 +116,6 @@ export function buildPageMap(): PageMap | null {
   if (!candidates) return null;
 
   for (const el of Array.from(candidates)) {
-    if (blocks.length >= MAX_BLOCKS) break;
     if (!MEANINGFUL.has(el.tagName)) continue;
     if (isSensitive(el)) continue;
 
@@ -141,13 +140,43 @@ export function buildPageMap(): PageMap | null {
 
   if (blocks.length === 0) return null;
   blocks.sort((a, b) => a.y - b.y);
+  const kept = capBlocks(blocks);
 
   return {
     structureHash: hashStructure(blocks),
     height: Math.round(document.documentElement.scrollHeight),
     width: Math.round(window.innerWidth),
-    blocks,
+    blocks: kept,
   };
+}
+
+/**
+ * Trims an oversized map without blinding the bottom of the page.
+ *
+ * Truncating in document order would map only the top of a long page, so every
+ * abandonment further down would land on unmapped ground and vanish from the
+ * analysis — silently, and precisely where long sales pages lose people.
+ * Interactive elements and headings are always kept because they are what a
+ * visitor stops on; the remaining budget is spread evenly over the height.
+ */
+function capBlocks(blocks: PageBlock[]): PageBlock[] {
+  if (blocks.length <= MAX_BLOCKS) return blocks;
+
+  const anchors: PageBlock[] = [];
+  const rest: PageBlock[] = [];
+  for (const b of blocks) {
+    if (b.input || b.tag === "button" || /^h[1-3]$/.test(b.tag)) anchors.push(b);
+    else rest.push(b);
+  }
+
+  const budget = Math.max(0, MAX_BLOCKS - anchors.length);
+  const step = budget > 0 ? rest.length / budget : Infinity;
+  const sampled: PageBlock[] = [];
+  for (let i = 0; i < rest.length && sampled.length < budget; i += step) {
+    sampled.push(rest[Math.floor(i)]!);
+  }
+
+  return [...anchors, ...sampled].sort((a, b) => a.y - b.y).slice(0, MAX_BLOCKS);
 }
 
 /**

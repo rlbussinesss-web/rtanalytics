@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CircleDollarSign, Image, MousePointerClick, Play, TextCursorInput, Type } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
+import { RecordedPlayer } from "./ReplaysPanel";
 import type { RangeKey } from "./useMetrics";
 
 /**
@@ -52,15 +53,16 @@ export function AutopsyPanel({
   siteId,
   range,
   onRangeChange,
-  onWatch,
 }: {
   siteId: string;
   range: RangeKey;
   onRangeChange: (r: RangeKey) => void;
-  onWatch: (sessionId: string) => void;
 }) {
   const [data, setData] = useState<AutopsyReport | null>(null);
   const [loading, setLoading] = useState(true);
+  // The evidence is always a past session, so it plays in the recorded player;
+  // the live viewer would sit waiting for frames that will never arrive.
+  const [playing, setPlaying] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -149,7 +151,7 @@ export function AutopsyPanel({
                 <div className="ap-proof">
                   <span>Confira você mesmo:</span>
                   {o.sampleSessions.map((s) => (
-                    <button key={s} className="ap-watch" onClick={() => onWatch(s)}>
+                    <button key={s} className="ap-watch" onClick={() => setPlaying(s)}>
                       <Play size={12} fill="currentColor" stroke="none" /> {s.slice(0, 4)}
                     </button>
                   ))}
@@ -158,6 +160,10 @@ export function AutopsyPanel({
             </article>
           ))}
         </>
+      )}
+
+      {playing && (
+        <RecordedPlayer siteId={siteId} sessionId={playing} onClose={() => setPlaying(null)} />
       )}
     </div>
   );

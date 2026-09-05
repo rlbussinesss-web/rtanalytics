@@ -26,6 +26,19 @@ const RANGE_INTERVAL: Record<RangeKey, string> = {
 
 /** Below this, a cluster is an anecdote rather than a pattern. */
 const MIN_CLUSTER = 3;
+/**
+ * A session this recent has not abandoned — it is still happening. Counting it
+ * as a death would turn every current visitor into evidence against the page.
+ */
+const SETTLE_MINUTES = 30;
+/** Enough to name the gap without rendering an unbounded list. */
+const MAX_MISSING_MAPS = 10;
+
+/** Content is per page, so campaign parameters must not fragment the lookup. */
+function pagePath(path: string): string {
+  const q = path.indexOf("?");
+  return q === -1 ? path : path.slice(0, q);
+}
 
 interface PageBlock {
   y: number;
@@ -128,7 +141,13 @@ function anchorBlock(blocks: PageBlock[], y: number, h: number): PageBlock | nul
 export async function computeAutopsy(siteId: string, range: RangeKey): Promise<AutopsyReport> {
   const interval = RANGE_INTERVAL[range];
 
-  const [deaths, maps, rateRow] = await Promise.all([
+  const settled = `AND NOT EXISTS (
+      SELECT 1 FROM events r
+       WHERE r.site_id = $1 AND r.session_id = v.session_id
+         AND r.time > now() - interval '${SETTLE_MINUTES} minutes'
+    )`;
+
+  const [deaths, coverage, maps, rateRow] = await Promise.all([
     // The last position each abandoning session held. DISTINCT ON gives the
     // most recent viewport event per session; the last sample inside it is the
     // final place the visitor was before leaving.
@@ -149,7 +168,27 @@ export async function computeAutopsy(siteId: string, range: RangeKey): Promise<A
                AND c.session_id = v.session_id
                AND c.event_type = 'conversion'
           )
+          ${settled}
         ORDER BY v.session_id, v.time DESC`,
+      [siteId]
+    ),
+    // Real coverage: how many abandoned sessions could be examined at all.
+    // Counting only the rows the query above returned would always look like
+    // full coverage, because that query already selects sessions with a trail.
+    query<{ abandoned: string; with_trail: string }>(
+      `SELECT count(DISTINCT v.session_id)::int AS abandoned,
+              count(DISTINCT v.session_id) FILTER (WHERE v.event_type = 'viewport')::int AS with_trail
+         FROM events v
+        WHERE v.site_id = $1
+          AND v.is_bot IS NOT TRUE
+          AND v.time >= now() - interval '${interval}'
+          AND NOT EXISTS (
+            SELECT 1 FROM events c
+             WHERE c.site_id = v.site_id
+               AND c.session_id = v.session_id
+               AND c.event_type = 'conversion'
+          )
+          ${settled}`,
       [siteId]
     ),
     // The most recently seen map for each path.
@@ -171,7 +210,7 @@ export async function computeAutopsy(siteId: string, range: RangeKey): Promise<A
     ),
   ]);
 
-  const mapByPath = new Map(maps.map((m) => [m.path, m.blocks]));
+  const mapByPath = new Map(maps.map((m) => [pagePath(m.path), m.blocks]));
   const totals = rateRow[0];
   const sessions = Number(totals?.sessions ?? 0);
   const conversions = Number(totals?.conversions ?? 0);
@@ -184,17 +223,14 @@ export async function computeAutopsy(siteId: string, range: RangeKey): Promise<A
     { block: PageBlock; path: string; sessions: string[] }
   >();
   let examined = 0;
-  let skippedNoTrail = 0;
   const missing = new Set<string>();
 
   for (const d of deaths) {
-    if (d.y == null || d.h == null) {
-      skippedNoTrail += 1;
-      continue;
-    }
-    const blocks = mapByPath.get(d.path);
+    if (d.y == null || d.h == null) continue;
+    const page = pagePath(d.path);
+    const blocks = mapByPath.get(page);
     if (!blocks) {
-      missing.add(d.path);
+      missing.add(page);
       continue;
     }
     const block = anchorBlock(blocks, Number(d.y), Number(d.h));
@@ -203,8 +239,8 @@ export async function computeAutopsy(siteId: string, range: RangeKey): Promise<A
     examined += 1;
     // Identity is content-based, so the same block keeps its cluster even if the
     // page shifts it a few pixels between versions.
-    const key = `${d.path}|${block.tag}|${block.id ?? ""}|${(block.text ?? "").slice(0, 60)}`;
-    const entry = clusters.get(key) ?? { block, path: d.path, sessions: [] };
+    const key = `${page}|${block.tag}|${block.id ?? ""}|${(block.text ?? "").slice(0, 60)}`;
+    const entry = clusters.get(key) ?? { block, path: page, sessions: [] };
     entry.sessions.push(d.session_id);
     clusters.set(key, entry);
   }
@@ -231,12 +267,18 @@ export async function computeAutopsy(siteId: string, range: RangeKey): Promise<A
     })
     .sort((a, b) => b.sessions - a.sessions);
 
+  const abandoned = Number(coverage[0]?.abandoned ?? 0);
+  const withTrail = Number(coverage[0]?.with_trail ?? 0);
+
   return {
     range,
     examined,
-    skippedNoTrail,
+    // Sessions that abandoned without ever reporting a position: excluded from
+    // the analysis rather than guessed at, and reported so the coverage of the
+    // conclusions is visible instead of implied.
+    skippedNoTrail: Math.max(0, abandoned - withTrail),
     enoughData: objections.length > 0,
     objections,
-    missingMaps: [...missing],
+    missingMaps: [...missing].slice(0, MAX_MISSING_MAPS),
   };
 }

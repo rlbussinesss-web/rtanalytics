@@ -162,16 +162,21 @@ export interface PageMapRow {
 /**
  * Stores one version of a page's content map.
  *
- * Re-sends of a version it already has only refresh last_seen — the content is
- * by definition identical, so rewriting the blocks would be churn. last_seen is
- * what tells the analyses which version is current.
+ * A re-send always rewrites the content. The structure hash intentionally
+ * ignores text, so that a countdown or a personalised name does not spawn a new
+ * version on every visit — but that also means a rewritten headline keeps the
+ * same hash, and skipping the update would leave the autopsy quoting copy that
+ * no longer exists on the page.
  */
 export async function upsertPageMap(row: PageMapRow): Promise<void> {
   await getPool().query(
     `INSERT INTO page_maps (site_id, path, structure_hash, height, width, blocks)
      VALUES ($1, $2, $3, $4, $5, $6)
      ON CONFLICT (site_id, path, structure_hash)
-     DO UPDATE SET last_seen = now()`,
+     DO UPDATE SET blocks = EXCLUDED.blocks,
+                   height = EXCLUDED.height,
+                   width = EXCLUDED.width,
+                   last_seen = now()`,
     [row.siteId, row.path, row.structureHash, row.height, row.width, JSON.stringify(row.blocks)]
   );
 }

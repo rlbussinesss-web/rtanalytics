@@ -78,6 +78,10 @@ export async function listHighlights(
            WHERE r.site_id = e.site_id AND r.session_id = e.session_id
         )
       GROUP BY e.session_id
+      -- Deterministic slice: without an ORDER BY the cap would hand the
+      -- ranking an arbitrary subset, so the "best" recordings would shuffle
+      -- between identical requests on a busy site.
+      ORDER BY max(e.time) DESC
       LIMIT 500`,
     [siteId, CHECKOUT_PATH_PATTERN]
   );

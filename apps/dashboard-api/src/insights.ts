@@ -23,16 +23,26 @@ import type { RangeKey } from "./metrics.js";
  * Bot traffic is excluded everywhere, so a crawler wave cannot fake a spike.
  */
 
-/** Window length, and how far back each comparison window sits. */
-const RANGE_WINDOW: Record<RangeKey, { length: string; shift: string }> = {
+/**
+ * Window length, how far back each comparison window sits, and how many of them
+ * form the baseline.
+ *
+ * `history` must be at least MIN_BASELINE_SAMPLES for a comparison to ever be
+ * published — a guard test enforces that, because getting it wrong disables
+ * every comparison silently rather than failing loudly.
+ *
+ * The 30d range deliberately asks for fewer than the threshold: six 30-day
+ * windows would reach 180 days, far past the 90-day retention, so most of them
+ * would come back empty and a baseline of zeros would make ordinary traffic
+ * look like a permanent spike. Asking for what cannot be answered honestly is
+ * worse than reporting nothing, so the 30d range simply skips comparisons.
+ */
+export const RANGE_WINDOW: Record<RangeKey, { length: string; shift: string; history: number }> = {
   // A day is compared against the same weekday, not against yesterday.
-  "24h": { length: "24 hours", shift: "7 days" },
-  "7d": { length: "7 days", shift: "7 days" },
-  "30d": { length: "30 days", shift: "30 days" },
+  "24h": { length: "24 hours", shift: "7 days", history: 6 },
+  "7d": { length: "7 days", shift: "7 days", history: 6 },
+  "30d": { length: "30 days", shift: "30 days", history: 2 },
 };
-
-/** How many past windows form the baseline. */
-const HISTORY_WINDOWS = 4;
 
 /** Below this many sessions, percentage changes are noise. */
 const MIN_SESSIONS = 20;
@@ -76,7 +86,7 @@ export function change(after: number, before: number): number | null {
 }
 
 export async function computeInsights(siteId: string, range: RangeKey): Promise<InsightsReport> {
-  const { length, shift } = RANGE_WINDOW[range];
+  const { length, shift, history: historyWindows } = RANGE_WINDOW[range];
 
   // Window 0 is now; window k is the same slot k shifts ago. One query covers
   // the current period and its whole seasonal history.
@@ -94,7 +104,7 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
             count(DISTINCT e.session_id) FILTER (
               WHERE e.event_type = 'click' AND (e.payload->>'rage')::boolean
             )::int AS rage_sessions
-       FROM generate_series(0, ${HISTORY_WINDOWS}) AS k
+       FROM generate_series(0, ${historyWindows}) AS k
        LEFT JOIN events e
          ON e.site_id = $1
         AND e.is_bot IS NOT TRUE
@@ -117,7 +127,7 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
 
   const cur = at(0);
   const history: WindowTotals[] = [];
-  for (let k = 1; k <= HISTORY_WINDOWS; k++) history.push(at(k));
+  for (let k = 1; k <= historyWindows; k++) history.push(at(k));
 
   const insights: Insight[] = [];
 

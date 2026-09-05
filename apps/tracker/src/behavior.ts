@@ -110,21 +110,42 @@ function installClicks(emit: Emit): void {
       const rage = near.length >= RAGE_MIN;
 
       const target = e.target as Element | null;
-      // Node count rather than serialized HTML: innerHTML.length stringifies the
-      // entire document on every click (twice), which is a real cost on the
-      // visitor's device for a signal that only needs "did the page change".
-      const nodesBefore = document.getElementsByTagName("*").length;
       const urlBefore = location.href;
       const activeBefore = document.activeElement;
 
-      // Dead: no DOM change, no navigation and no focus landing shortly after.
+      // Watching for mutations answers "did the page react?" exactly, instead of
+      // inferring it from a size difference. Counting nodes misses text-only
+      // updates and single-node swaps; serialising innerHTML catches them but
+      // stringifies the whole document twice per click on the visitor's device.
+      // The observer costs nothing until something changes and is disconnected
+      // as soon as the verdict is made.
+      let mutated = false;
+      let observer: MutationObserver | null = null;
+      try {
+        observer = new MutationObserver(() => {
+          mutated = true;
+          observer?.disconnect();
+        });
+        observer.observe(document.documentElement, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ["class", "style", "hidden", "aria-expanded", "disabled"],
+        });
+      } catch {
+        /* no observer available: fall back to navigation and focus alone */
+      }
+
+      // Dead: nothing changed, nowhere navigated, nothing focused.
       let settled = false;
       const markDead = () => {
         if (settled) return;
         settled = true;
+        observer?.disconnect();
         const dead =
           location.href === urlBefore &&
-          Math.abs(document.getElementsByTagName("*").length - nodesBefore) < 3 &&
+          !mutated &&
           !focusLanded(target, activeBefore) &&
           !isInteractive(target);
         send(dead);
@@ -200,7 +221,10 @@ function installViewportTrail(emit: Emit): void {
   let lastY = -1;
 
   const sample = () => {
-    const y = Math.round(window.scrollY);
+    // Rubber-band overscroll on iOS reports a negative offset, which is not a
+    // position anyone was ever at — and would fail validation, discarding the
+    // entire batch of samples along with it.
+    const y = Math.max(0, Math.round(window.scrollY));
     const h = Math.round(window.innerHeight);
     // Only record movement; a visitor reading motionless is captured by the
     // gap between samples, not by repeating the same row over and over.

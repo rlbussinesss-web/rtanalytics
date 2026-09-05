@@ -112,6 +112,11 @@ class RTATracker {
         if (!shouldSendMap(location.pathname, map.structureHash)) return;
         this.transport.send({
           ...this.baseEnvelope(),
+          // Without the query string: the content of a page is the same
+          // whatever campaign tagged the link, and keying by the full URL would
+          // store one map per click id while the analysis — which looks the map
+          // up by page — would never find one for tagged traffic.
+          path: location.pathname,
           eventType: "page-map",
           payload: map,
         } as AnyTrackerEvent);

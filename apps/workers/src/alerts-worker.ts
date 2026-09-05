@@ -21,8 +21,13 @@ import { buildBaseline, detectSpike, type Baseline } from "@rtanalytics/shared-t
 const TICK_MS = 60_000;
 /** Window of arrivals each tick measures. */
 const WINDOW_MINUTES = 15;
-/** Weekly slots used to learn what this time of week normally looks like. */
-const HISTORY_WEEKS = 4;
+/**
+ * Weekly slots used to learn what this time of week normally looks like.
+ * Must stay at or above MIN_BASELINE_SAMPLES, or the baseline never becomes
+ * reliable and every alert falls back to the absolute floor — which is the
+ * difference between "traffic is unusual" and "traffic exists".
+ */
+const HISTORY_WEEKS = 6;
 
 /** Never alert below this many visitors, however dramatic the ratio. */
 const MIN_VISITORS = Number(process.env.SPIKE_MIN_VISITORS ?? 5);
@@ -83,17 +88,33 @@ async function baselines(): Promise<Map<string, Baseline>> {
       GROUP BY e.site_id, k`
   );
 
-  const perSite = new Map<string, number[]>();
+  const perSite = new Map<string, Map<number, number>>();
   for (const r of rows) {
-    const list = perSite.get(r.site_id) ?? [];
-    list.push(Number(r.visitors));
-    perSite.set(r.site_id, list);
+    const byWeek = perSite.get(r.site_id) ?? new Map<number, number>();
+    byWeek.set(Number(r.k), Number(r.visitors));
+    perSite.set(r.site_id, byWeek);
   }
 
+  // A week that returned no row is ambiguous: either the slot was genuinely
+  // quiet, or the site did not exist yet. Only weeks after the site's first
+  // event count as a real zero — otherwise a young site's baseline would be
+  // padded with fabricated zeros, and every visitor would look like a spike.
+  const { rows: firstSeen } = await getPool().query<{ site_id: string; first_seen: Date }>(
+    `SELECT site_id, min(time) AS first_seen FROM events GROUP BY site_id`
+  );
+  const bornAt = new Map(firstSeen.map((r) => [r.site_id, r.first_seen.getTime()]));
+
+  const weekMs = 7 * 24 * 60 * 60 * 1000;
+  const now = Date.now();
   const out = new Map<string, Baseline>();
-  for (const [siteId, history] of perSite) {
-    // Weeks with no traffic at all are still evidence of a quiet slot.
-    while (history.length < HISTORY_WEEKS) history.push(0);
+
+  for (const [siteId, byWeek] of perSite) {
+    const born = bornAt.get(siteId) ?? now;
+    const history: number[] = [];
+    for (let k = 1; k <= HISTORY_WEEKS; k++) {
+      if (now - weekMs * k < born) continue; // the site did not exist yet
+      history.push(byWeek.get(k) ?? 0);
+    }
     out.set(siteId, buildBaseline(history));
   }
   return out;

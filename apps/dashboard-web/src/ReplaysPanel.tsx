@@ -215,7 +215,7 @@ interface TimelineMarker {
 
 const SPEEDS = [1, 2, 4, 8];
 
-function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessionId: string; onClose: () => void }) {
+export function RecordedPlayer({ siteId, sessionId, onClose }: { siteId: string; sessionId: string; onClose: () => void }) {
   const stageRef = useRef<HTMLDivElement | null>(null);
   const hostRef = useRef<HTMLDivElement | null>(null);
   const replayerRef = useRef<ReplayerCtl | null>(null);

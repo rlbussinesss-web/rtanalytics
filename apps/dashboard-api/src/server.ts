@@ -103,7 +103,10 @@ app.get("/api/sites/:siteId/autopsy", async (req) => {
 app.get("/api/sites/:siteId/discovery", async (req) => {
   const { siteId } = req.params as { siteId: string };
   const q = req.query as { range?: string };
-  const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "7d";
+  // Honours 24h: the panel shares the funnel's range selector, and silently
+  // widening the window would show the user a different period than the one
+  // they picked.
+  const range: RangeKey = q.range === "24h" || q.range === "30d" ? q.range : "7d";
   return discoverFunnel(siteId, range);
 });
 

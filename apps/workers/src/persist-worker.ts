@@ -147,21 +147,28 @@ async function main(): Promise<void> {
           // would be a large duplicated blob on every re-send.
           const parsed = JSON.parse(json) as Record<string, unknown>;
           if (parsed.eventType === "page-map") {
+            // Storage failures are handled separately from malformed input: a
+            // database blip must leave the entry pending for redelivery, not
+            // ack it away and lose the map until the next visitor sends one.
             const p = parsed.payload as {
               structureHash: string;
               height: number;
               width: number;
               blocks: unknown;
             };
-            await upsertPageMap({
-              siteId: String(parsed.siteId),
-              path: String(parsed.path ?? ""),
-              structureHash: p.structureHash,
-              height: p.height,
-              width: p.width,
-              blocks: p.blocks,
-            });
-            await redis.xack(STREAM, GROUP, id);
+            try {
+              await upsertPageMap({
+                siteId: String(parsed.siteId),
+                path: String(parsed.path ?? ""),
+                structureHash: p.structureHash,
+                height: p.height,
+                width: p.width,
+                blocks: p.blocks,
+              });
+              await redis.xack(STREAM, GROUP, id);
+            } catch (err) {
+              console.error("[persist-worker] page map store failed, leaving unacked", err);
+            }
             continue;
           }
 
