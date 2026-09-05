@@ -15,6 +15,13 @@ import { computeAudience } from "./audience.js";
 import { computeInsights } from "./insights.js";
 import { getPropensityModel } from "./model.js";
 import { listSites } from "./sites.js";
+import {
+  listProjects,
+  createProject,
+  renameProject,
+  deleteProject,
+  syncAllowedSites,
+} from "./projects.js";
 import { discoverFunnel } from "./discovery.js";
 import { listHighlights } from "./highlights.js";
 import { computeAutopsy } from "./autopsy.js";
@@ -52,6 +59,33 @@ app.post("/api/login", async () => ({ ok: true }));
 
 /** Sites that have sent data, for the dashboard's site switcher. */
 app.get("/api/sites", async () => ({ sites: await listSites() }));
+
+/** Projects: one per tracked offer, created before any traffic exists. */
+app.get("/api/projects", async () => ({ projects: await listProjects() }));
+
+app.post("/api/projects", async (req, reply) => {
+  const b = (req.body ?? {}) as { name?: string; domain?: string; siteId?: string };
+  if (!b.name || !b.name.trim()) {
+    return reply.code(400).send({ error: "name is required" });
+  }
+  return { project: await createProject(b.name, b.domain, b.siteId) };
+});
+
+app.patch("/api/projects/:siteId", async (req, reply) => {
+  const { siteId } = req.params as { siteId: string };
+  const b = (req.body ?? {}) as { name?: string; domain?: string };
+  if (!b.name || !b.name.trim()) {
+    return reply.code(400).send({ error: "name is required" });
+  }
+  await renameProject(siteId, b.name, b.domain);
+  return { ok: true };
+});
+
+app.delete("/api/projects/:siteId", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  await deleteProject(siteId);
+  return { ok: true };
+});
 
 app.get("/api/sites/:siteId/online-count", async (req) => {
   const { siteId } = req.params as { siteId: string };
@@ -249,6 +283,16 @@ app.register(async (fastify) => {
     socket.on("error", cleanup);
   });
 });
+
+// Postgres is the record for which sites may collect; Redis only caches it.
+// Re-publishing at startup means a flushed cache cannot silently stop every
+// project from accepting traffic.
+try {
+  const synced = await syncAllowedSites();
+  app.log.info(`synced ${synced} project site keys to the allow list`);
+} catch (err) {
+  app.log.error({ err }, "could not sync allowed site keys");
+}
 
 try {
   await app.listen({ port: PORT, host: "0.0.0.0" });

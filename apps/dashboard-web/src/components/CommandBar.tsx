@@ -12,6 +12,7 @@ import {
   Sun,
   Trophy,
   Stethoscope,
+  LayoutGrid,
 } from "lucide-react";
 import type { ViewKey } from "./Sidebar";
 import type { SiteSummary } from "../useSites";
@@ -22,6 +23,7 @@ import type { SiteSummary } from "../useSites";
  * the right. Frees the full width below for each screen's own spatial layout.
  */
 const LENSES: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
+  { key: "projects", label: "Projetos", icon: <LayoutGrid /> },
   { key: "live", label: "Ao Vivo", icon: <Activity /> },
   { key: "audience", label: "Público", icon: <Trophy /> },
   { key: "autopsy", label: "Autópsia", icon: <Stethoscope /> },

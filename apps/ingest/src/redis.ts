@@ -53,3 +53,8 @@ export async function publishReplayChunk(
   const redis = getRedis();
   await redis.publish(`replay:${siteId}:${sessionId}`, JSON.stringify(event));
 }
+
+/** Reads the set of site keys the dashboard has registered as projects. */
+export async function readAllowedSites(key: string): Promise<string[]> {
+  return getRedis().smembers(key);
+}

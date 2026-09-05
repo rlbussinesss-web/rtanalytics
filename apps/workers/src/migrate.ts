@@ -96,6 +96,18 @@ CREATE TABLE IF NOT EXISTS page_maps (
 
 CREATE INDEX IF NOT EXISTS idx_page_maps_recent ON page_maps (site_id, path, last_seen DESC);
 
+-- One row per tracked offer/site. Projects exist independently of traffic so
+-- that a new offer can be created, named and given its snippet *before* the
+-- first visitor arrives — discovering sites from the event log alone means a
+-- site is invisible until it already has data, which is exactly backwards for
+-- someone setting up a new landing page.
+CREATE TABLE IF NOT EXISTS projects (
+    site_id     TEXT        PRIMARY KEY,
+    name        TEXT        NOT NULL,
+    domain      TEXT,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Per-session curation: favorite flag and free-form tags, set from the
 -- dashboard. Separate from event data so it can be updated without touching
 -- the immutable event log.

@@ -9,6 +9,7 @@ import { LiveScreen } from "./LiveScreen";
 import { MetricsPanel } from "./MetricsPanel";
 import { AudiencePanel } from "./AudiencePanel";
 import { AutopsyPanel } from "./AutopsyPanel";
+import { ProjectsPanel } from "./ProjectsPanel";
 import { FunnelPanel } from "./FunnelPanel";
 import { HeatmapView } from "./HeatmapView";
 import { ReplaysPanel } from "./ReplaysPanel";
@@ -151,6 +152,15 @@ function Dashboard({
       <div className="main">
         <div className={`content${view === "live" ? " is-bento" : ""}`}>
           <div className="content-inner">
+            {view === "projects" && (
+              <ProjectsPanel
+                currentSiteId={siteId}
+                onOpen={(id) => {
+                  setSiteId(id);
+                  setView("live");
+                }}
+              />
+            )}
             {view === "live" && (
               <AoVivo
                 siteId={siteId}

@@ -4,7 +4,7 @@ import type { WebSocket } from "ws";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { parseTrackerEvent } from "@rtanalytics/protocol";
 import { publishEvent, recordReplayChunk } from "./stream.js";
-import { touchPresence, publishLiveEvent, publishReplayChunk } from "./redis.js";
+import { touchPresence, publishLiveEvent, publishReplayChunk, readAllowedSites } from "./redis.js";
 import { registerSession, unregisterSession, connectionCount, subscribeToCommands } from "./sessions.js";
 import { enrichFromConnection } from "./enrich.js";
 import type { EnrichedFields } from "@rtanalytics/shared-types";
@@ -25,8 +25,35 @@ const ALLOWED_SITE_IDS = new Set(
     .filter(Boolean)
 );
 
+/**
+ * Site keys registered by the dashboard when a project is created.
+ *
+ * Without this, adding an offer would mean editing an environment variable and
+ * redeploying — so the allow list is read from Redis and refreshed on a timer.
+ * It is a cache of what the dashboard already persisted, so a Redis flush costs
+ * a few seconds of rejected events, not the configuration itself.
+ */
+const ALLOWED_SITES_KEY = "rta:sites:allowed";
+const ALLOWED_REFRESH_MS = 30_000;
+let registeredSites = new Set<string>();
+
+async function refreshRegisteredSites(): Promise<void> {
+  try {
+    const members = await readAllowedSites(ALLOWED_SITES_KEY);
+    registeredSites = new Set(members);
+  } catch (err) {
+    // Keep the previous set: dropping it would reject live traffic over a
+    // transient Redis hiccup.
+    app.log.warn({ err }, "could not refresh registered sites");
+  }
+}
+
 function isSiteAllowed(siteId: string): boolean {
-  return ALLOWED_SITE_IDS.size === 0 || ALLOWED_SITE_IDS.has(siteId);
+  if (registeredSites.has(siteId)) return true;
+  // Both empty means an unconfigured local environment, where allowing
+  // everything is the useful default.
+  if (ALLOWED_SITE_IDS.size === 0 && registeredSites.size === 0) return true;
+  return ALLOWED_SITE_IDS.has(siteId);
 }
 
 /**
@@ -81,6 +108,9 @@ await app.register(websocketPlugin);
 subscribeToCommands(process.env.REDIS_URL ?? "redis://localhost:6379", (msg) =>
   app.log.info(msg)
 );
+
+await refreshRegisteredSites();
+setInterval(() => void refreshRegisteredSites(), ALLOWED_REFRESH_MS);
 
 app.get("/healthz", async () => ({
   status: "ok",

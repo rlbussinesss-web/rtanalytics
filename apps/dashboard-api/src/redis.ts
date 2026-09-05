@@ -56,3 +56,19 @@ export async function sendRecordingCommand(
   const redis = getRedis();
   await redis.publish("control", JSON.stringify({ sessionId, action }));
 }
+
+/**
+ * Site keys the ingest is allowed to accept, beyond whatever is pinned in its
+ * environment. Kept in Redis because the ingest already has a connection and
+ * reads it cheaply, so creating a project takes effect within seconds without
+ * redeploying or editing configuration.
+ */
+export const ALLOWED_SITES_KEY = "rta:sites:allowed";
+
+export async function allowSite(siteId: string): Promise<void> {
+  await getRedis().sadd(ALLOWED_SITES_KEY, siteId);
+}
+
+export async function disallowSite(siteId: string): Promise<void> {
+  await getRedis().srem(ALLOWED_SITES_KEY, siteId);
+}
