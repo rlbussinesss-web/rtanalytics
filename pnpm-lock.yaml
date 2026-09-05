@@ -51,6 +51,9 @@ importers:
 
   apps/dashboard-web:
     dependencies:
+      '@rtanalytics/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
       lucide-react:
         specifier: ^1.28.0
         version: 1.28.0(react@18.3.1)
