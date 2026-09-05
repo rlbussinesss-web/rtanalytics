@@ -14,6 +14,9 @@ import { computeMetrics, type RangeKey } from "./metrics.js";
 import { computeAudience } from "./audience.js";
 import { computeInsights } from "./insights.js";
 import { getPropensityModel } from "./model.js";
+import { listSites } from "./sites.js";
+import { discoverFunnel } from "./discovery.js";
+import { listHighlights } from "./highlights.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames, getSessionMarkers } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
@@ -45,6 +48,9 @@ app.get("/healthz", async () => ({ status: "ok" }));
 
 /** Lets the dashboard UI check a password before storing it. */
 app.post("/api/login", async () => ({ ok: true }));
+
+/** Sites that have sent data, for the dashboard's site switcher. */
+app.get("/api/sites", async () => ({ sites: await listSites() }));
 
 app.get("/api/sites/:siteId/online-count", async (req) => {
   const { siteId } = req.params as { siteId: string };
@@ -80,6 +86,20 @@ app.get("/api/sites/:siteId/insights", async (req) => {
   const q = req.query as { range?: string };
   const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "24h";
   return computeInsights(siteId, range);
+});
+
+app.get("/api/sites/:siteId/discovery", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string };
+  const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "7d";
+  return discoverFunnel(siteId, range);
+});
+
+app.get("/api/sites/:siteId/highlights", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string };
+  const range: RangeKey = q.range === "24h" || q.range === "30d" ? q.range : "7d";
+  return { range, highlights: await listHighlights(siteId, range) };
 });
 
 app.get("/api/sites/:siteId/audience", async (req) => {

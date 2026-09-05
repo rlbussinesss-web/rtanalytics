@@ -1,29 +1,40 @@
 import { query } from "./db.js";
+import { buildBaseline, robustZ, type Baseline } from "@rtanalytics/shared-types";
 import type { RangeKey } from "./metrics.js";
 
 /**
  * Automatic insights: what changed, and what is worth acting on.
  *
  * The dashboard already shows *what* the numbers are. This answers the harder
- * question a person actually asks — "is that good, and what changed?" — by
- * comparing the current window against the immediately preceding one of the
- * same length, plus a few pattern checks that surface a specific page or
- * source rather than a global average.
+ * question a person actually asks — "is that good, and what changed?".
+ *
+ * The comparison is seasonal rather than sequential. Comparing the last 24h
+ * against the 24h before it treats Sunday night and Monday morning as the same
+ * thing, which is how an alerting system ends up shouting every weekend. Each
+ * window is instead compared against the *same window on previous weeks*, and
+ * the "normal" level is a median rather than a mean so one viral day cannot
+ * poison the baseline for a month afterwards.
  *
  * Two rules keep it honest rather than noisy:
- *  - Nothing is reported below MIN_SESSIONS: with 3 sessions a "-50%" is one
- *    person changing their mind, not a trend.
- *  - Nothing is reported below MIN_CHANGE: small drifts are normal traffic.
- * Bot traffic is excluded everywhere, so a crawler wave can't fake a spike.
+ *  - nothing is reported below MIN_SESSIONS: with 3 sessions a "-50%" is one
+ *    person changing their mind, not a trend;
+ *  - nothing is reported below MIN_CHANGE, and never without a reliable
+ *    baseline behind it.
+ * Bot traffic is excluded everywhere, so a crawler wave cannot fake a spike.
  */
 
-const RANGE_INTERVAL: Record<RangeKey, string> = {
-  "24h": "24 hours",
-  "7d": "7 days",
-  "30d": "30 days",
+/** Window length, and how far back each comparison window sits. */
+const RANGE_WINDOW: Record<RangeKey, { length: string; shift: string }> = {
+  // A day is compared against the same weekday, not against yesterday.
+  "24h": { length: "24 hours", shift: "7 days" },
+  "7d": { length: "7 days", shift: "7 days" },
+  "30d": { length: "30 days", shift: "30 days" },
 };
 
-/** Below this many sessions in a window, percentage changes are noise. */
+/** How many past windows form the baseline. */
+const HISTORY_WINDOWS = 4;
+
+/** Below this many sessions, percentage changes are noise. */
 const MIN_SESSIONS = 20;
 /** Relative change that counts as a real move rather than normal drift. */
 const MIN_CHANGE = 0.15;
@@ -50,8 +61,6 @@ export interface InsightsReport {
 
 interface WindowTotals {
   sessions: number;
-  visitors: number;
-  pageviews: number;
   conversions: number;
   errors: number;
   rageSessions: number;
@@ -67,49 +76,49 @@ export function change(after: number, before: number): number | null {
 }
 
 export async function computeInsights(siteId: string, range: RangeKey): Promise<InsightsReport> {
-  const interval = RANGE_INTERVAL[range];
+  const { length, shift } = RANGE_WINDOW[range];
 
-  // Both windows in one pass: current is [now-interval, now), previous is the
-  // equally long stretch right before it, so the comparison is like-for-like.
-  const totalsRows = await query<{
-    bucket: string;
+  // Window 0 is now; window k is the same slot k shifts ago. One query covers
+  // the current period and its whole seasonal history.
+  const rows = await query<{
+    k: string;
     sessions: string;
-    visitors: string;
-    pageviews: string;
     conversions: string;
     errors: string;
     rage_sessions: string;
   }>(
-    `SELECT
-        CASE WHEN time >= now() - interval '${interval}' THEN 'cur' ELSE 'prev' END AS bucket,
-        count(DISTINCT session_id)::int AS sessions,
-        count(DISTINCT visitor_id)::int AS visitors,
-        count(*) FILTER (WHERE event_type = 'pageview')::int AS pageviews,
-        count(DISTINCT session_id) FILTER (WHERE event_type = 'conversion')::int AS conversions,
-        count(*) FILTER (WHERE event_type = 'error')::int AS errors,
-        count(DISTINCT session_id) FILTER (WHERE event_type = 'click' AND (payload->>'rage')::boolean)::int AS rage_sessions
-      FROM events
-      WHERE site_id = $1
-        AND is_bot IS NOT TRUE
-        AND time >= now() - interval '${interval}' - interval '${interval}'
-      GROUP BY 1`,
+    `SELECT k::int AS k,
+            count(DISTINCT e.session_id)::int AS sessions,
+            count(DISTINCT e.session_id) FILTER (WHERE e.event_type = 'conversion')::int AS conversions,
+            count(*) FILTER (WHERE e.event_type = 'error')::int AS errors,
+            count(DISTINCT e.session_id) FILTER (
+              WHERE e.event_type = 'click' AND (e.payload->>'rage')::boolean
+            )::int AS rage_sessions
+       FROM generate_series(0, ${HISTORY_WINDOWS}) AS k
+       LEFT JOIN events e
+         ON e.site_id = $1
+        AND e.is_bot IS NOT TRUE
+        AND e.time >= now() - (interval '${shift}' * k) - interval '${length}'
+        AND e.time <  now() - (interval '${shift}' * k)
+      GROUP BY k
+      ORDER BY k`,
     [siteId]
   );
 
-  const pick = (bucket: string): WindowTotals => {
-    const r = totalsRows.find((x) => x.bucket === bucket);
+  const at = (k: number): WindowTotals => {
+    const r = rows.find((x) => Number(x.k) === k);
     return {
       sessions: Number(r?.sessions ?? 0),
-      visitors: Number(r?.visitors ?? 0),
-      pageviews: Number(r?.pageviews ?? 0),
       conversions: Number(r?.conversions ?? 0),
       errors: Number(r?.errors ?? 0),
       rageSessions: Number(r?.rage_sessions ?? 0),
     };
   };
 
-  const cur = pick("cur");
-  const prev = pick("prev");
+  const cur = at(0);
+  const history: WindowTotals[] = [];
+  for (let k = 1; k <= HISTORY_WINDOWS; k++) history.push(at(k));
+
   const insights: Insight[] = [];
 
   if (cur.sessions < MIN_SESSIONS) {
@@ -123,30 +132,42 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
           title: "Volume ainda baixo para comparar",
           detail:
             `Foram ${cur.sessions} sessão(ões) no período. A partir de ${MIN_SESSIONS} ` +
-            "eu passo a comparar com o período anterior e apontar o que mudou.",
+            "eu passo a comparar com as mesmas janelas de semanas anteriores e apontar o que mudou.",
         },
       ],
     };
   }
 
-  // --- Traffic ---------------------------------------------------------
-  const sessionsChange = change(cur.sessions, prev.sessions);
-  if (sessionsChange !== null && Math.abs(sessionsChange) >= MIN_CHANGE && prev.sessions >= MIN_SESSIONS) {
-    const up = sessionsChange > 0;
+  // --- Traffic, against the seasonal norm --------------------------------
+  const sessionsBaseline = buildBaseline(history.map((h) => h.sessions));
+  const trafficChange = change(cur.sessions, sessionsBaseline.expected);
+  if (
+    sessionsBaseline.reliable &&
+    trafficChange !== null &&
+    Math.abs(trafficChange) >= MIN_CHANGE &&
+    Math.abs(robustZ(cur.sessions, sessionsBaseline)) >= 1.5
+  ) {
+    const up = trafficChange > 0;
     insights.push({
       id: "sessions-change",
       severity: up ? "good" : "warn",
-      change: sessionsChange,
-      title: `Tráfego ${up ? "subiu" : "caiu"} ${pct(sessionsChange)}`,
-      detail: `${cur.sessions} sessões contra ${prev.sessions} no período anterior.`,
+      change: trafficChange,
+      title: `Tráfego ${up ? "acima" : "abaixo"} do normal em ${pct(trafficChange)}`,
+      detail:
+        `${cur.sessions} sessões, contra ${Math.round(sessionsBaseline.expected)} de costume ` +
+        `neste mesmo período da semana.`,
     });
   }
 
-  // --- Conversion ------------------------------------------------------
+  // --- Conversion --------------------------------------------------------
   const curRate = ratio(cur.conversions, cur.sessions);
-  const prevRate = ratio(prev.conversions, prev.sessions);
-  const rateChange = change(curRate, prevRate);
-  if (rateChange !== null && Math.abs(rateChange) >= MIN_CHANGE && prev.sessions >= MIN_SESSIONS) {
+  const historicalRates = history
+    .filter((h) => h.sessions >= MIN_SESSIONS)
+    .map((h) => ratio(h.conversions, h.sessions));
+  const rateBaseline: Baseline = buildBaseline(historicalRates);
+  const rateChange = change(curRate, rateBaseline.expected);
+
+  if (rateBaseline.reliable && rateChange !== null && Math.abs(rateChange) >= MIN_CHANGE) {
     const up = rateChange > 0;
     insights.push({
       id: "conversion-rate-change",
@@ -154,8 +175,8 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
       change: rateChange,
       title: `Taxa de conversão ${up ? "subiu" : "caiu"} ${pct(rateChange)}`,
       detail:
-        `${(curRate * 100).toFixed(1)}% agora contra ${(prevRate * 100).toFixed(1)}% antes ` +
-        `(${cur.conversions} de ${cur.sessions} sessões).`,
+        `${(curRate * 100).toFixed(1)}% agora contra ${(rateBaseline.expected * 100).toFixed(1)}% ` +
+        `de costume (${cur.conversions} de ${cur.sessions} sessões).`,
     });
   } else if (cur.conversions === 0) {
     insights.push({
@@ -168,11 +189,13 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
     });
   }
 
-  // --- Frustration -----------------------------------------------------
+  // --- Frustration -------------------------------------------------------
   const curRageRate = ratio(cur.rageSessions, cur.sessions);
-  const prevRageRate = ratio(prev.rageSessions, prev.sessions);
-  const rageChange = change(curRageRate, prevRageRate);
-  if (curRageRate > 0.05 && rageChange !== null && rageChange >= MIN_CHANGE) {
+  const rageBaseline = buildBaseline(
+    history.filter((h) => h.sessions > 0).map((h) => ratio(h.rageSessions, h.sessions))
+  );
+  const rageChange = change(curRageRate, rageBaseline.expected);
+  if (curRageRate > 0.05 && rageBaseline.reliable && rageChange !== null && rageChange >= MIN_CHANGE) {
     insights.push({
       id: "rage-up",
       severity: "warn",
@@ -182,25 +205,26 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
     });
   }
 
-  const errorsChange = change(cur.errors, prev.errors);
-  if (cur.errors > 0 && errorsChange !== null && errorsChange >= MIN_CHANGE) {
+  const errorsBaseline = buildBaseline(history.map((h) => h.errors));
+  const errorsChange = change(cur.errors, errorsBaseline.expected);
+  if (cur.errors > 0 && errorsBaseline.reliable && errorsChange !== null && errorsChange >= MIN_CHANGE) {
     insights.push({
       id: "errors-up",
       severity: "bad",
       change: errorsChange,
-      title: `Erros de JavaScript subiram ${pct(errorsChange)}`,
-      detail: `${cur.errors} erro(s) no período contra ${prev.errors} antes.`,
+      title: `Erros de JavaScript acima do normal (${pct(errorsChange)})`,
+      detail: `${cur.errors} erro(s) no período, contra ${Math.round(errorsBaseline.expected)} de costume.`,
     });
   }
 
-  // --- Worst page by frustration ---------------------------------------
+  // --- Worst page by frustration -----------------------------------------
   const [worstPage] = await query<{ path: string; clicks: string; rage: string }>(
     `SELECT path,
             count(*)::int AS clicks,
             count(*) FILTER (WHERE (payload->>'rage')::boolean)::int AS rage
        FROM events
       WHERE site_id = $1 AND is_bot IS NOT TRUE AND event_type = 'click'
-        AND time >= now() - interval '${interval}'
+        AND time >= now() - interval '${length}'
       GROUP BY path
      HAVING count(*) >= ${MIN_CLICKS_FOR_PAGE}
         AND count(*) FILTER (WHERE (payload->>'rage')::boolean) > 0
@@ -222,7 +246,7 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
     }
   }
 
-  // --- Best converting source ------------------------------------------
+  // --- Best converting source --------------------------------------------
   const [bestSource] = await query<{ label: string; sessions: string; conversions: string }>(
     `SELECT val AS label,
             count(*)::int AS sessions,
@@ -232,7 +256,7 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
                 max(payload->>'utm_source') AS val,
                 bool_or(event_type = 'conversion') AS converted
            FROM events
-          WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= now() - interval '${interval}'
+          WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= now() - interval '${length}'
           GROUP BY session_id
        ) s
       WHERE val IS NOT NULL AND val <> ''
@@ -261,7 +285,7 @@ export async function computeInsights(siteId: string, range: RangeKey): Promise<
       id: "stable",
       severity: "info",
       title: "Sem mudanças relevantes",
-      detail: "Os números estão em linha com o período anterior — nada fora do normal para apontar.",
+      detail: "Os números estão em linha com o normal para este período — nada fora do padrão para apontar.",
     });
   }
 

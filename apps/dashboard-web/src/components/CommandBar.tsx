@@ -13,6 +13,7 @@ import {
   Trophy,
 } from "lucide-react";
 import type { ViewKey } from "./Sidebar";
+import type { SiteSummary } from "../useSites";
 
 /**
  * Top command bar — the product's navigation, deliberately not a left rail.
@@ -37,6 +38,9 @@ export function CommandBar({
   theme,
   onToggleTheme,
   onLogout,
+  sites,
+  siteId,
+  onSiteChange,
 }: {
   active: ViewKey;
   onNavigate: (v: ViewKey) => void;
@@ -45,6 +49,9 @@ export function CommandBar({
   theme: "dark" | "light";
   onToggleTheme: () => void;
   onLogout: () => void;
+  sites: SiteSummary[];
+  siteId: string;
+  onSiteChange: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -52,8 +59,27 @@ export function CommandBar({
     <header className="cmdbar">
       <div className="cmd-brand">
         <span className="cmd-mark">R</span>
-        RTA <small>revenue radar</small>
+        RTA
       </div>
+
+      {/* Site switcher. Rendered only once more than one project reports data,
+          so a single-site setup keeps a clean bar. */}
+      {sites.length > 1 ? (
+        <select
+          className="cmd-site"
+          value={siteId}
+          onChange={(e) => onSiteChange(e.target.value)}
+          aria-label="Trocar de site"
+        >
+          {sites.map((s) => (
+            <option key={s.siteId} value={s.siteId}>
+              {s.host ?? s.siteId}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <span className="cmd-site is-static">{sites[0]?.host ?? siteId}</span>
+      )}
 
       <button
         className="cmd-icon cmd-menu-btn"

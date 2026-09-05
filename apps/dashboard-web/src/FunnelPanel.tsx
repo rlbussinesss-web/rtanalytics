@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_BASE_URL, getToken } from "./token";
 import type { RangeKey } from "./useMetrics";
+import { DiscoveryPanel } from "./DiscoveryPanel";
 
 /**
  * Conversion funnel builder + viewer.
@@ -87,7 +88,12 @@ export function FunnelPanel({ siteId, range }: { siteId: string; range: RangeKey
   const maxSessions = results && results.length ? results[0]!.sessions : 0;
 
   return (
-    <div className="funnel-layout">
+    <>
+      {/* Found automatically; the configured funnel below answers a question
+          you already have, this one finds the one you don't. */}
+      <DiscoveryPanel siteId={siteId} range={range} />
+
+      <div className="funnel-layout">
       <div className="card funnel-config">
         <div className="top-title">Etapas do funil</div>
         {steps.map((step, i) => (
@@ -145,5 +151,6 @@ export function FunnelPanel({ siteId, range }: { siteId: string; range: RangeKey
         ))}
       </div>
     </div>
+    </>
   );
 }

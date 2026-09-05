@@ -4,6 +4,7 @@ import "rrweb/dist/style.css";
 import { Bug, EyeOff, Flame, LogOut, MousePointerClick, Pause, Play, Plus, Star, X, Zap } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
 import { avatarFor, deviceLabel, flag, fmtDuration } from "./lib/ui";
+import { HighlightsSection } from "./HighlightsSection";
 
 interface ReplaySummary {
   sessionId: string;
@@ -93,6 +94,8 @@ export function ReplaysPanel({ siteId }: { siteId: string }) {
           </p>
         </div>
       )}
+
+      <HighlightsSection siteId={siteId} onPlay={setPlaying} />
 
       <div className="replay-grid">
         {replays.map((r) => (

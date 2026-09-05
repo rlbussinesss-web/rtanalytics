@@ -9,6 +9,7 @@
  */
 
 export * from "./scoring.js";
+export * from "./baseline.js";
 
 export const SCHEMA_VERSION = 1 as const;
 

@@ -12,6 +12,7 @@ import { Redis } from "ioredis";
 import { insertEventsBatch, type EventInsertRow } from "./db.js";
 import { runMigrations } from "./migrate.js";
 import { runReplayConsumer } from "./replay-consumer.js";
+import { runAlertsWorker } from "./alerts-worker.js";
 
 const STREAM = "events";
 const GROUP = "persist-workers";
@@ -68,6 +69,11 @@ async function main(): Promise<void> {
   );
 
   const redis = createRedis();
+
+  // Spike alerts share this process: they are a periodic read, not a stream
+  // consumer, so a separate service would cost a container to run a query a
+  // minute. Failures are logged and never take persistence down with them.
+  runAlertsWorker(createRedis());
 
   // MKSTREAM creates the stream if the ingest side hasn't written to it yet.
   try {

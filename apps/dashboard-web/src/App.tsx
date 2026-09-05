@@ -4,6 +4,7 @@ import { useLiveEvents, type LiveEvent } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
 import { useTheme } from "./useTheme";
+import { useSites } from "./useSites";
 import { LiveScreen } from "./LiveScreen";
 import { MetricsPanel } from "./MetricsPanel";
 import { AudiencePanel } from "./AudiencePanel";
@@ -20,8 +21,6 @@ import { AlertToasts } from "./components/AlertsCenter";
 import { useAlerts } from "./useAlerts";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
 import "./styles.css";
-
-const DEFAULT_SITE_ID = import.meta.env.VITE_SITE_ID ?? "demo-site";
 
 export function App() {
   const [authed, setAuthed] = useState(() => getToken() !== null);
@@ -98,7 +97,7 @@ function Dashboard({
   onToggleTheme: () => void;
   onLogout: () => void;
 }) {
-  const siteId = DEFAULT_SITE_ID;
+  const { sites, siteId, setSiteId } = useSites();
   const { events, connected } = useLiveEvents(siteId);
   const onlineCount = useOnlineCount(siteId, events);
   const sessions = useSessions(siteId, events);
@@ -137,6 +136,9 @@ function Dashboard({
   return (
     <div className="shell">
       <CommandBar
+        sites={sites}
+        siteId={siteId}
+        onSiteChange={setSiteId}
         active={view}
         onNavigate={setView}
         onlineCount={onlineCount}
