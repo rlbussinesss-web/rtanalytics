@@ -9,10 +9,16 @@
     "dev:dashboard-api": "pnpm --filter @rtanalytics/dashboard-api dev",
     "dev:dashboard-web": "pnpm --filter @rtanalytics/dashboard-web dev",
     "dev:workers": "pnpm --filter @rtanalytics/workers dev",
-    "build:tracker": "pnpm --filter @rtanalytics/tracker build"
+    "build:tracker": "pnpm --filter @rtanalytics/tracker build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "verify": "pnpm -r run build && vitest run"
   },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@11.5.1"
+  "packageManager": "pnpm@11.5.1",
+  "devDependencies": {
+    "vitest": "^2.1.9"
+  }
 }
