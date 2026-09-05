@@ -1117,3 +1117,15 @@ body {
 .bt-bots.clean .bar > i { background: var(--live); }
 .bt-bots .legend { display: flex; justify-content: space-between; gap: 12px; margin-top: 9px; font-size: 11px; color: rgba(255, 255, 255, 0.85); font-family: var(--mono); }
 .bt-bots.clean .legend { color: var(--text-muted); }
+
+/* ---- Propensity score on a live session ---- */
+.bt-score {
+  font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: 0.02em;
+  padding: 2px 7px; border-radius: 999px; margin-left: auto; flex: none;
+  color: var(--text-muted); background: var(--hover); border: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.bt-score.warm { color: var(--warning); background: color-mix(in srgb, var(--warning) 15%, transparent); border-color: color-mix(in srgb, var(--warning) 35%, transparent); }
+.bt-score.hot { color: #161616; background: var(--accent); border-color: var(--accent); }
+:root[data-theme="light"] .bt-score.hot { color: #fff; }
+.bt-scard .sm b { gap: 8px; }

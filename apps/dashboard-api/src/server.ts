@@ -13,6 +13,7 @@ import { extractToken, isValidToken } from "./auth.js";
 import { computeMetrics, type RangeKey } from "./metrics.js";
 import { computeAudience } from "./audience.js";
 import { computeInsights } from "./insights.js";
+import { getPropensityModel } from "./model.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames, getSessionMarkers } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
@@ -62,6 +63,16 @@ app.get("/api/sites/:siteId/metrics", async (req) => {
   const range: RangeKey =
     q.range === "7d" || q.range === "30d" ? q.range : "24h";
   return computeMetrics(siteId, range);
+});
+
+/**
+ * The trained propensity model. The dashboard fetches it once and scores live
+ * visitors locally as their events arrive — scoring per visitor over the
+ * network would add a round trip to every heartbeat for no gain.
+ */
+app.get("/api/sites/:siteId/model", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  return getPropensityModel(siteId);
 });
 
 app.get("/api/sites/:siteId/insights", async (req) => {

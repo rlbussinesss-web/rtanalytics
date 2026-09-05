@@ -8,6 +8,8 @@
  * mirror these definitions.
  */
 
+export * from "./scoring.js";
+
 export const SCHEMA_VERSION = 1 as const;
 
 /** Discriminator for all event kinds captured by the tracker SDK. */

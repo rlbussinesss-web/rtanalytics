@@ -4,6 +4,9 @@ import type { LiveEvent } from "./useLiveEvents";
 import { useMetrics } from "./useMetrics";
 import { useAudience } from "./useAudience";
 import { useInsights } from "./useInsights";
+import { useModel } from "./useModel";
+import { buildLiveFeatures } from "./lib/liveFeatures";
+import { scoreSession, isCheckoutPath } from "@rtanalytics/shared-types";
 import { deviceLabel, sinceLabel } from "./lib/ui";
 
 /**
@@ -28,7 +31,6 @@ interface Props {
   onWatch: (id: string) => void;
 }
 
-const HOT = /\/(pagamento|checkout|carrinho|cart|payment)/i;
 const nf = new Intl.NumberFormat("pt-BR");
 const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -36,6 +38,7 @@ export function AoVivo(p: Props) {
   const { metrics: m } = useMetrics(p.siteId, "24h");
   const { audience: a } = useAudience(p.siteId, "24h");
   const { report: ins } = useInsights(p.siteId, "24h");
+  const model = useModel(p.siteId);
 
   const converted = useMemo(() => {
     const s = new Set<string>();
@@ -55,18 +58,30 @@ export function AoVivo(p: Props) {
     [p.events]
   );
 
-  const sessionCards = useMemo(() => p.sessions.slice(0, 6).map((sessionId) => {
-    const info = p.infoBySession.get(sessionId);
-    const path = info?.path ?? "/";
-    return {
-      sessionId,
-      path,
-      host: info?.host,
-      device: info?.device,
-      hot: converted.has(sessionId) || HOT.test(path),
-      since: sinceLabel(p.firstSeen.get(sessionId) ?? Date.now()),
-    };
-  }), [p.sessions, p.infoBySession, p.firstSeen, converted]);
+  const featuresBySession = useMemo(() => buildLiveFeatures(p.events), [p.events]);
+
+  const sessionCards = useMemo(() => {
+    const cards = p.sessions.map((sessionId) => {
+      const info = p.infoBySession.get(sessionId);
+      const path = info?.path ?? "/";
+      const features = featuresBySession.get(sessionId);
+      // Only score once the model has enough history to mean something.
+      const score =
+        model?.ready && features ? scoreSession(model, features) : null;
+      return {
+        sessionId,
+        path,
+        host: info?.host,
+        device: info?.device,
+        score,
+        hot: converted.has(sessionId) || isCheckoutPath(path),
+        since: sinceLabel(p.firstSeen.get(sessionId) ?? Date.now()),
+      };
+    });
+    // Most promising first: the whole point is knowing who to watch now.
+    cards.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+    return cards.slice(0, 6);
+  }, [p.sessions, p.infoBySession, p.firstSeen, converted, featuresBySession, model]);
 
   // Top converting campaigns → falls back to source when campaigns are absent.
   const topCampaigns = useMemo(() => {
@@ -150,14 +165,30 @@ export function AoVivo(p: Props) {
 
       {/* Gravações de Sessão */}
       <section className="bt-tile bt-sess">
-        <div className="bt-h"><span className="t">Gravações de Sessão <small>· {p.sessions.length} ao vivo</small></span></div>
+        <div className="bt-h">
+          <span className="t">Gravações de Sessão <small>· {p.sessions.length} ao vivo</small></span>
+          {/* The model's state is shown rather than hidden: an empty score
+              column should never look like "nobody is promising". */}
+          <span className="bt-kick" title="Chance de conversão prevista por sessão">
+            {model?.ready
+              ? `IA ativa · ${nf.format(model.trainedOn)} sessões`
+              : "IA aprendendo · dados insuficientes"}
+          </span>
+        </div>
         <div className="bt-sess-grid">
           {sessionCards.length === 0 && <div className="bt-empty">Nenhuma sessão ativa agora.</div>}
           {sessionCards.map((s) => (
             <button key={s.sessionId} className={`bt-scard${s.hot ? " hot" : ""}`} onClick={() => p.onWatch(s.sessionId)} title="Assistir ao vivo">
               <span className="sic"><Play size={15} fill="currentColor" stroke="none" /></span>
               <div className="sm">
-                <b>Sessão {s.sessionId.slice(0, 4)} <span className="plat">{deviceLabel(s.device)}</span></b>
+                <b>
+                  Sessão {s.sessionId.slice(0, 4)} <span className="plat">{deviceLabel(s.device)}</span>
+                  {s.score !== null && (
+                    <span className={`bt-score${s.score >= 0.5 ? " hot" : s.score >= 0.2 ? " warm" : ""}`}>
+                      {Math.round(s.score * 100)}%
+                    </span>
+                  )}
+                </b>
                 <p><span>◷ {s.since}</span><span>{s.host ? s.host + s.path : s.path}</span></p>
               </div>
             </button>
