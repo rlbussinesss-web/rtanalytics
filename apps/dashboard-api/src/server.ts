@@ -18,7 +18,7 @@ import { listSites } from "./sites.js";
 import {
   listProjects,
   createProject,
-  renameProject,
+  updateProject,
   deleteProject,
   syncAllowedSites,
 } from "./projects.js";
@@ -73,11 +73,11 @@ app.post("/api/projects", async (req, reply) => {
 
 app.patch("/api/projects/:siteId", async (req, reply) => {
   const { siteId } = req.params as { siteId: string };
-  const b = (req.body ?? {}) as { name?: string; domain?: string };
-  if (!b.name || !b.name.trim()) {
-    return reply.code(400).send({ error: "name is required" });
+  const b = (req.body ?? {}) as { name?: string; domain?: string; conversionPath?: string };
+  if (b.name !== undefined && !b.name.trim()) {
+    return reply.code(400).send({ error: "name cannot be empty" });
   }
-  await renameProject(siteId, b.name, b.domain);
+  await updateProject(siteId, b);
   return { ok: true };
 });
 

@@ -116,6 +116,10 @@ CREATE TABLE IF NOT EXISTS projects (
 -- dashboard. Separate from event data so it can be updated without touching
 -- the immutable event log.
 ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+-- Which URL counts as a conversion for this offer. Stored per project so the
+-- snippet handed to the user is already correct instead of a default they
+-- must remember to edit.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS conversion_path TEXT;
 
 CREATE TABLE IF NOT EXISTS session_meta (
     site_id     TEXT        NOT NULL,

@@ -13,6 +13,7 @@ import {
   Trophy,
   Stethoscope,
   LayoutGrid,
+  Code2,
 } from "lucide-react";
 import type { ViewKey } from "./Sidebar";
 import type { SiteSummary } from "../useSites";
@@ -32,6 +33,7 @@ const LENSES: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: "heatmaps", label: "Mapas", icon: <Flame /> },
   { key: "replays", label: "Gravações", icon: <PlayCircle /> },
   { key: "overview", label: "Visão geral", icon: <LayoutDashboard /> },
+  { key: "install", label: "Instalação", icon: <Code2 /> },
 ];
 
 export function CommandBar({

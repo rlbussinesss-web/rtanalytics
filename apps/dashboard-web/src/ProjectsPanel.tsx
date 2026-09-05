@@ -53,9 +53,11 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 export function ProjectsPanel({
   currentSiteId,
   onOpen,
+  onInstall,
 }: {
   currentSiteId: string;
   onOpen: (siteId: string) => void;
+  onInstall: (siteId: string) => void;
 }) {
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [creating, setCreating] = useState(false);
@@ -242,7 +244,7 @@ export function ProjectsPanel({
             </div>
 
             <div className="pj-actions">
-              <button title="Script de instalação" onClick={() => setShowSnippet(p.siteId)}>
+              <button title="Instruções de instalação" onClick={() => onInstall(p.siteId)}>
                 <Copy size={15} />
               </button>
               <button title="Renomear" onClick={() => adopt(p)}>

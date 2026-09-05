@@ -10,6 +10,7 @@ import { MetricsPanel } from "./MetricsPanel";
 import { AudiencePanel } from "./AudiencePanel";
 import { AutopsyPanel } from "./AutopsyPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
+import { InstallPanel } from "./InstallPanel";
 import { FunnelPanel } from "./FunnelPanel";
 import { HeatmapView } from "./HeatmapView";
 import { ReplaysPanel } from "./ReplaysPanel";
@@ -159,8 +160,13 @@ function Dashboard({
                   setSiteId(id);
                   setView("live");
                 }}
+                onInstall={(id) => {
+                  setSiteId(id);
+                  setView("install");
+                }}
               />
             )}
+            {view === "install" && <InstallPanel siteId={siteId} />}
             {view === "live" && (
               <AoVivo
                 siteId={siteId}

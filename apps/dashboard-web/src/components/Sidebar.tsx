@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { avatarFor } from "../lib/ui";
 
-export type ViewKey = "projects" | "overview" | "live" | "metrics" | "audience" | "autopsy" | "funnel" | "heatmaps" | "replays";
+export type ViewKey = "projects" | "install" | "overview" | "live" | "metrics" | "audience" | "autopsy" | "funnel" | "heatmaps" | "replays";
 
 const NAV: { group: string; items: { key: ViewKey; label: string; icon: React.ReactNode }[] }[] = [
   {

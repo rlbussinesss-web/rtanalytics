@@ -19,6 +19,8 @@ export interface Project {
   name: string;
   domain: string | null;
   createdAt: string | null;
+  /** URL that marks a conversion, e.g. "/pagamento". */
+  conversionPath: string | null;
   /** True when this came from the event log without ever being created here. */
   discovered: boolean;
   sessions7d: number;
@@ -52,8 +54,14 @@ function makeSiteId(name: string): string {
 
 export async function listProjects(): Promise<Project[]> {
   const [rows, stats] = await Promise.all([
-    query<{ site_id: string; name: string; domain: string | null; created_at: Date }>(
-      `SELECT site_id, name, domain, created_at FROM projects
+    query<{
+      site_id: string;
+      name: string;
+      domain: string | null;
+      created_at: Date;
+      conversion_path: string | null;
+    }>(
+      `SELECT site_id, name, domain, created_at, conversion_path FROM projects
         WHERE archived_at IS NULL
         ORDER BY created_at DESC`
     ),
@@ -86,6 +94,7 @@ export async function listProjects(): Promise<Project[]> {
       name: r.name,
       domain: r.domain ?? s?.host ?? null,
       createdAt: r.created_at.toISOString(),
+      conversionPath: r.conversion_path,
       discovered: false,
       sessions7d: Number(s?.sessions ?? 0),
       conversions7d: Number(s?.conversions ?? 0),
@@ -110,6 +119,7 @@ export async function listProjects(): Promise<Project[]> {
       name: s.site_id,
       domain: s.host,
       createdAt: null,
+      conversionPath: null,
       discovered: true,
       sessions7d: Number(s.sessions),
       conversions7d: Number(s.conversions),
@@ -153,6 +163,7 @@ export async function createProject(
     name: clean,
     domain: domain?.trim() || null,
     createdAt: new Date().toISOString(),
+    conversionPath: null,
     discovered: false,
     sessions7d: 0,
     conversions7d: 0,
@@ -160,10 +171,23 @@ export async function createProject(
   };
 }
 
-export async function renameProject(siteId: string, name: string, domain?: string): Promise<void> {
+export async function updateProject(
+  siteId: string,
+  fields: { name?: string; domain?: string; conversionPath?: string }
+): Promise<void> {
+  // COALESCE on every column so a partial update never blanks the rest.
   await query(
-    `UPDATE projects SET name = $2, domain = COALESCE($3, domain) WHERE site_id = $1`,
-    [siteId, name.trim().slice(0, 80), domain?.trim().slice(0, 200) || null]
+    `UPDATE projects
+        SET name = COALESCE($2, name),
+            domain = COALESCE($3, domain),
+            conversion_path = COALESCE($4, conversion_path)
+      WHERE site_id = $1`,
+    [
+      siteId,
+      fields.name?.trim().slice(0, 80) || null,
+      fields.domain?.trim().slice(0, 200) || null,
+      fields.conversionPath?.trim().slice(0, 200) || null,
+    ]
   );
 }
 
