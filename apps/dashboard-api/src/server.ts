@@ -12,6 +12,7 @@ import {
 import { extractToken, isValidToken } from "./auth.js";
 import { computeMetrics, type RangeKey } from "./metrics.js";
 import { computeAudience } from "./audience.js";
+import { computeInsights } from "./insights.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames, getSessionMarkers } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
@@ -61,6 +62,13 @@ app.get("/api/sites/:siteId/metrics", async (req) => {
   const range: RangeKey =
     q.range === "7d" || q.range === "30d" ? q.range : "24h";
   return computeMetrics(siteId, range);
+});
+
+app.get("/api/sites/:siteId/insights", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string };
+  const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "24h";
+  return computeInsights(siteId, range);
 });
 
 app.get("/api/sites/:siteId/audience", async (req) => {

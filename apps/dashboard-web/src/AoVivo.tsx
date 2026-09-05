@@ -1,8 +1,9 @@
 import { useMemo } from "react";
-import { CornerDownRight, Play, Target } from "lucide-react";
+import { CornerDownRight, Play, Shield, Sparkles, Target } from "lucide-react";
 import type { LiveEvent } from "./useLiveEvents";
 import { useMetrics } from "./useMetrics";
 import { useAudience } from "./useAudience";
+import { useInsights } from "./useInsights";
 import { deviceLabel, sinceLabel } from "./lib/ui";
 
 /**
@@ -34,6 +35,7 @@ const money = (v: number) => v.toLocaleString("pt-BR", { style: "currency", curr
 export function AoVivo(p: Props) {
   const { metrics: m } = useMetrics(p.siteId, "24h");
   const { audience: a } = useAudience(p.siteId, "24h");
+  const { report: ins } = useInsights(p.siteId, "24h");
 
   const converted = useMemo(() => {
     const s = new Set<string>();
@@ -73,6 +75,11 @@ export function AoVivo(p: Props) {
   }, [a]);
   const campMax = Math.max(...topCampaigns.map((r) => r.conversionRate), 0.0001);
 
+  const botSessions = m?.botSessions ?? 0;
+  // Share of all traffic that was filtered out, so the number has context.
+  const botShare = m && botSessions + m.sessions > 0
+    ? Math.round((botSessions / (botSessions + m.sessions)) * 100)
+    : 0;
   const convRate = m ? Math.round(m.conversionRate * 1000) / 10 : 0;
   const uniquePct = m && m.pageviews > 0 ? Math.round((m.visitors / m.pageviews) * 100) : 0;
 
@@ -185,6 +192,41 @@ export function AoVivo(p: Props) {
             <span className="sales">{r.conversions} conv.</span>
           </div>
         ))}
+      </section>
+
+      {/* Insights automaticos */}
+      <section className="bt-tile bt-insights">
+        <div className="bt-h">
+          <span className="t">O que mudou</span>
+          <span className="bt-kick"><Sparkles size={12} style={{ verticalAlign: "-2px" }} /> automático</span>
+        </div>
+        {!ins && <div className="bt-empty" style={{ textAlign: "left", padding: "14px 0" }}>analisando…</div>}
+        {ins?.insights.map((i) => (
+          <div key={i.id} className={`bt-ins-row ${i.severity}`}>
+            <span className="bt-ins-dot" />
+            <div>
+              <div className="bt-ins-t">{i.title}</div>
+              <div className="bt-ins-d">{i.detail}</div>
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Bots bloqueados */}
+      <section className={`bt-tile bt-bots${botSessions === 0 ? " clean" : ""}`}>
+        <div className="bt-h">
+          <span className="ic"><Shield size={15} /></span>
+          <span className="bt-kick" style={botSessions > 0 ? { color: "rgba(255,255,255,.75)" } : undefined}>
+            proteção
+          </span>
+        </div>
+        <div className="big bt-num">{nf.format(botSessions)}</div>
+        <div className="sub">{botSessions === 1 ? "Bot bloqueado" : "Bots bloqueados"} · 24h</div>
+        <div className="bar"><i style={{ width: `${botShare}%` }} /></div>
+        <div className="legend">
+          <span>{botShare}% do tráfego</span>
+          <span>{nf.format(m?.botEvents ?? 0)} eventos</span>
+        </div>
       </section>
     </div>
   );

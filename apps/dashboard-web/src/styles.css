@@ -940,12 +940,13 @@ body {
 
 .bento {
   display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px;
-  grid-template-rows: 132px 154px auto auto;
+  grid-template-rows: 132px 154px auto auto auto;
   grid-template-areas:
     "viz viz viz viz viz traf traf traf traf hero hero hero"
     "viz viz viz viz viz chart chart chart chart hero hero hero"
     "sess sess sess sess sess sess sess sess sess req req req"
-    "vendas vendas vendas vendas vendas criat criat criat criat req req req";
+    "vendas vendas vendas vendas vendas criat criat criat criat req req req"
+    "insights insights insights insights insights insights insights insights bots bots bots bots";
 }
 .bt-tile {
   background: var(--surface-1); border: 1px solid var(--border); border-radius: 22px;
@@ -1084,3 +1085,35 @@ body {
   .bt-live .d { animation: none; }
   .bt-req-row { animation: none; }
 }
+
+/* ---- Insights automaticos + bots (bento) ---- */
+.bt-insights { grid-area: insights; }
+.bt-ins-row {
+  display: grid; grid-template-columns: 8px 1fr; gap: 13px; align-items: start;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.bt-ins-row:last-child { border-bottom: none; }
+.bt-ins-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 6px; background: var(--text-faint); }
+.bt-ins-row.good .bt-ins-dot { background: var(--live); }
+.bt-ins-row.warn .bt-ins-dot { background: var(--warning); }
+.bt-ins-row.bad .bt-ins-dot { background: var(--danger); }
+.bt-ins-row.info .bt-ins-dot { background: var(--text-faint); }
+.bt-ins-t { font-size: 13.5px; font-weight: 600; letter-spacing: -0.01em; }
+.bt-ins-row.good .bt-ins-t { color: var(--live); }
+.bt-ins-row.bad .bt-ins-t { color: var(--danger); }
+.bt-ins-row.warn .bt-ins-t { color: var(--warning); }
+.bt-ins-d { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+
+.bt-bots { grid-area: bots; background: linear-gradient(150deg, var(--danger), #c22f18); border: none; color: #fff; display: flex; flex-direction: column; }
+.bt-bots.clean { background: var(--surface-1); border: 1px solid var(--border); color: var(--text); }
+.bt-bots .ic { width: 30px; height: 30px; border-radius: 9px; background: rgba(255, 255, 255, 0.2); display: grid; place-items: center; }
+.bt-bots.clean .ic { background: var(--hover); color: var(--text-muted); }
+.bt-bots .big { font-size: 46px; font-weight: 750; letter-spacing: -0.03em; line-height: 1; margin-top: 10px; }
+.bt-bots .sub { font-size: 12.5px; color: rgba(255, 255, 255, 0.9); margin-top: 3px; font-weight: 500; }
+.bt-bots.clean .sub { color: var(--text-muted); }
+.bt-bots .bar { height: 7px; border-radius: 7px; background: rgba(255, 255, 255, 0.28); margin-top: auto; overflow: hidden; }
+.bt-bots.clean .bar { background: var(--hover); }
+.bt-bots .bar > i { display: block; height: 100%; background: #fff; border-radius: 7px; }
+.bt-bots.clean .bar > i { background: var(--live); }
+.bt-bots .legend { display: flex; justify-content: space-between; gap: 12px; margin-top: 9px; font-size: 11px; color: rgba(255, 255, 255, 0.85); font-family: var(--mono); }
+.bt-bots.clean .legend { color: var(--text-muted); }

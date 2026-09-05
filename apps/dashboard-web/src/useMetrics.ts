@@ -21,6 +21,9 @@ export interface Metrics {
   pagesPerSession: number;
   newVisitors: number;
   returningVisitors: number;
+  /** Crawler/automation traffic excluded from every number above. */
+  botSessions: number;
+  botEvents: number;
   rageClickRate: number;
   deadClickRate: number;
   errorRate: number;
