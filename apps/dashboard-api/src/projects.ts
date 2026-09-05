@@ -171,17 +171,26 @@ export async function createProject(
   };
 }
 
+/**
+ * Updates a project, creating the row when the site was only ever discovered.
+ *
+ * A plain UPDATE silently matched zero rows for a discovered site — the request
+ * still answered "ok" while nothing was stored, so configuring one appeared to
+ * work and never did. Writing the row here means configuring a discovered site
+ * adopts it, which is what the user is asking for by editing it.
+ */
 export async function updateProject(
   siteId: string,
   fields: { name?: string; domain?: string; conversionPath?: string }
 ): Promise<void> {
   // COALESCE on every column so a partial update never blanks the rest.
   await query(
-    `UPDATE projects
-        SET name = COALESCE($2, name),
-            domain = COALESCE($3, domain),
-            conversion_path = COALESCE($4, conversion_path)
-      WHERE site_id = $1`,
+    `INSERT INTO projects (site_id, name, domain, conversion_path)
+     VALUES ($1, COALESCE($2, $1), $3, $4)
+     ON CONFLICT (site_id) DO UPDATE
+        SET name = COALESCE($2, projects.name),
+            domain = COALESCE($3, projects.domain),
+            conversion_path = COALESCE($4, projects.conversion_path)`,
     [
       siteId,
       fields.name?.trim().slice(0, 80) || null,
@@ -189,6 +198,8 @@ export async function updateProject(
       fields.conversionPath?.trim().slice(0, 200) || null,
     ]
   );
+  // Now that it has a row, it is a project and must be allowed to collect.
+  await allowSite(siteId);
 }
 
 /**
