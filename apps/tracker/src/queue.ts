@@ -48,9 +48,18 @@ export class EventQueue {
     return [...this.queue];
   }
 
-  /** Removes the given number of oldest events (after successful flush). */
-  drop(count: number): void {
-    this.queue.splice(0, count);
+  /**
+   * Removes one event once the server has acknowledged it.
+   *
+   * Removal is by id rather than by position because acks can arrive out of
+   * order, and because an event must survive in the queue until the server
+   * confirms it — dropping on send would lose everything still buffered when
+   * a socket dies.
+   */
+  ack(eventId: string): void {
+    const i = this.queue.findIndex((e) => e.eventId === eventId);
+    if (i === -1) return;
+    this.queue.splice(i, 1);
     this.persist();
   }
 

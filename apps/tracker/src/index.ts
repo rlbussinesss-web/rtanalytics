@@ -1,6 +1,6 @@
 import { SCHEMA_VERSION } from "./types";
 import type { AnyTrackerEvent } from "./types";
-import { getVisitorId, getSessionId, uuid } from "./ids";
+import { getVisitorId, getSessionId, touchSession, uuid } from "./ids";
 import { Transport } from "./transport";
 import { Recorder } from "./recorder";
 import { installBehavior } from "./behavior";
@@ -163,6 +163,7 @@ class RTATracker {
   }
 
   private trackHeartbeat(): void {
+    touchSession();
     this.transport.send({
       ...this.baseEnvelope(),
       eventType: "heartbeat",

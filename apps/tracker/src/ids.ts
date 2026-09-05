@@ -41,6 +41,19 @@ export function getVisitorId(): string {
   return id;
 }
 
+/**
+ * Marks the session as still active.
+ *
+ * The session id rotates after SESSION_TIMEOUT_MS of inactivity, and that
+ * timer is only refreshed when the id is read — which happens once per page
+ * load. A visitor reading one long page for 40 minutes would come back as a
+ * brand new session on their next click. The heartbeat calls this so "active"
+ * means active, not "loaded a page recently".
+ */
+export function touchSession(): void {
+  safeSet(SESSION_LAST_SEEN_KEY, String(Date.now()));
+}
+
 export function getSessionId(): string {
   const now = Date.now();
   const lastSeen = Number(safeGet(SESSION_LAST_SEEN_KEY) ?? 0);

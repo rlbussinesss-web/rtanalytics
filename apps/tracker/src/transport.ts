@@ -4,6 +4,8 @@ import { EventQueue } from "./queue";
 const MAX_BACKOFF_MS = 30_000;
 const BASE_BACKOFF_MS = 500;
 const FLUSH_BATCH_SIZE = 50;
+/** Give up on an event after this many delivery attempts. */
+const MAX_SEND_ATTEMPTS = 5;
 
 /**
  * WebSocket transport with a local queue, automatic reconnect and
@@ -20,6 +22,10 @@ export class Transport {
   private attempt = 0;
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private closedByUser = false;
+  /** Event ids sent on the current socket but not yet acknowledged. */
+  private inFlight = new Set<string>();
+  /** Delivery attempts per event id, so a poison event can't block forever. */
+  private attempts = new Map<string, number>();
 
   private onCommand: ((type: string) => void) | null = null;
 
@@ -50,9 +56,17 @@ export class Transport {
 
     this.ws.addEventListener("message", (ev: MessageEvent) => {
       try {
-        const msg = JSON.parse(String(ev.data)) as { type?: string };
-        // "ack" and "error" are per-event replies; anything else is a command.
-        if (msg.type && msg.type !== "ack" && msg.type !== "error") {
+        const msg = JSON.parse(String(ev.data)) as { type?: string; eventId?: string };
+        if (msg.type === "ack") {
+          // Confirmed durable server-side: only now is it safe to forget.
+          if (msg.eventId) {
+            this.forget(msg.eventId);
+          }
+          this.flush();
+        } else if (msg.type === "error") {
+          // The server rejected this event; retrying it would fail forever.
+          if (msg.eventId) this.forget(msg.eventId);
+        } else if (msg.type) {
           this.onCommand?.(msg.type);
         }
       } catch {
@@ -61,6 +75,10 @@ export class Transport {
     });
 
     this.ws.addEventListener("close", () => {
+      // Anything unacknowledged never made it. Clearing in-flight puts those
+      // events back in line so the next socket resends them; the server
+      // deduplicates by eventId, so a resend can never double-count.
+      this.inFlight.clear();
       if (!this.closedByUser) this.scheduleReconnect();
     });
 
@@ -92,24 +110,39 @@ export class Transport {
     this.flush();
   }
 
+  /**
+   * Sends everything queued that isn't already awaiting an ack. Events stay in
+   * the queue until the server confirms them, so a socket that dies mid-flight
+   * costs a resend rather than the data. Each incoming ack re-triggers a flush,
+   * which drains anything beyond one batch.
+   */
   private flush(): void {
     if (!this.isOpen || this.queue.isEmpty()) return;
 
-    const batch = this.queue.peekAll().slice(0, FLUSH_BATCH_SIZE);
-    let sent = 0;
-    for (const event of batch) {
+    const pending = this.queue.peekAll().filter((e) => !this.inFlight.has(e.eventId));
+    for (const event of pending.slice(0, FLUSH_BATCH_SIZE)) {
+      const tries = (this.attempts.get(event.eventId) ?? 0) + 1;
+      if (tries > MAX_SEND_ATTEMPTS) {
+        // Repeatedly unacknowledged: drop it rather than stall everything
+        // behind it. Losing one event beats losing the whole queue.
+        this.forget(event.eventId);
+        continue;
+      }
       try {
         this.ws!.send(JSON.stringify(event));
-        sent += 1;
+        this.attempts.set(event.eventId, tries);
+        this.inFlight.add(event.eventId);
       } catch {
-        break; // stop on first failure, keep remainder queued
+        break; // stop on first failure, keep the remainder queued
       }
     }
-    if (sent > 0) this.queue.drop(sent);
-    if (!this.queue.isEmpty()) {
-      // more events queued than this batch covered; drain on next tick
-      queueMicrotask(() => this.flush());
-    }
+  }
+
+  /** Drops an event from the queue and all delivery bookkeeping. */
+  private forget(eventId: string): void {
+    this.queue.ack(eventId);
+    this.inFlight.delete(eventId);
+    this.attempts.delete(eventId);
   }
 
   close(): void {
