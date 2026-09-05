@@ -105,12 +105,18 @@ CREATE TABLE IF NOT EXISTS projects (
     site_id     TEXT        PRIMARY KEY,
     name        TEXT        NOT NULL,
     domain      TEXT,
-    created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Removal is remembered rather than erased: the events stay, and without
+    -- this marker the site would immediately reappear as an unnamed project
+    -- the moment discovery ran again.
+    archived_at TIMESTAMPTZ
 );
 
 -- Per-session curation: favorite flag and free-form tags, set from the
 -- dashboard. Separate from event data so it can be updated without touching
 -- the immutable event log.
+ALTER TABLE projects ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ;
+
 CREATE TABLE IF NOT EXISTS session_meta (
     site_id     TEXT        NOT NULL,
     session_id  TEXT        NOT NULL,

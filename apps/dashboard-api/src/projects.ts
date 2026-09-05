@@ -53,7 +53,9 @@ function makeSiteId(name: string): string {
 export async function listProjects(): Promise<Project[]> {
   const [rows, stats] = await Promise.all([
     query<{ site_id: string; name: string; domain: string | null; created_at: Date }>(
-      `SELECT site_id, name, domain, created_at FROM projects ORDER BY created_at DESC`
+      `SELECT site_id, name, domain, created_at FROM projects
+        WHERE archived_at IS NULL
+        ORDER BY created_at DESC`
     ),
     // Activity for every site that has data, whether or not it was created here.
     query<{
@@ -93,7 +95,14 @@ export async function listProjects(): Promise<Project[]> {
 
   // Anything sending data that was never registered here still deserves to be
   // visible — otherwise an existing install would vanish from the product.
-  const known = new Set(rows.map((r) => r.site_id));
+  // Archived keys are excluded: the user already said they did not want it.
+  const archived = await query<{ site_id: string }>(
+    `SELECT site_id FROM projects WHERE archived_at IS NOT NULL`
+  );
+  const known = new Set([
+    ...rows.map((r) => r.site_id),
+    ...archived.map((r) => r.site_id),
+  ]);
   for (const s of stats) {
     if (known.has(s.site_id)) continue;
     projects.push({
@@ -129,7 +138,8 @@ export async function createProject(
   await query(
     `INSERT INTO projects (site_id, name, domain) VALUES ($1, $2, $3)
      ON CONFLICT (site_id) DO UPDATE SET name = EXCLUDED.name,
-                                        domain = COALESCE(EXCLUDED.domain, projects.domain)`,
+                                        domain = COALESCE(EXCLUDED.domain, projects.domain),
+                                        archived_at = NULL`,
     [siteId, clean, domain?.trim().slice(0, 200) || null]
   );
 
@@ -165,7 +175,11 @@ export async function renameProject(siteId: string, name: string, domain?: strin
  * other reports may still reference.
  */
 export async function deleteProject(siteId: string): Promise<void> {
-  await query(`DELETE FROM projects WHERE site_id = $1`, [siteId]);
+  await query(
+    `INSERT INTO projects (site_id, name, archived_at) VALUES ($1, $1, now())
+     ON CONFLICT (site_id) DO UPDATE SET archived_at = now()`,
+    [siteId]
+  );
   await disallowSite(siteId);
 }
 
@@ -177,7 +191,9 @@ export async function deleteProject(siteId: string): Promise<void> {
  * runs at startup so Postgres remains the source of truth.
  */
 export async function syncAllowedSites(): Promise<number> {
-  const rows = await query<{ site_id: string }>(`SELECT site_id FROM projects`);
+  const rows = await query<{ site_id: string }>(
+    `SELECT site_id FROM projects WHERE archived_at IS NULL`
+  );
   for (const r of rows) await allowSite(r.site_id);
   return rows.length;
 }
