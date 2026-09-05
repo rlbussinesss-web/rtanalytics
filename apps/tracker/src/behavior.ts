@@ -58,6 +58,40 @@ function cssPath(el: Element | null): string {
   return parts.join(" > ").slice(0, 512);
 }
 
+/**
+ * Whether the click handed focus to something.
+ *
+ * Focusing a field changes nothing about the document, so a DOM-diff heuristic
+ * alone reports every single click into a form as "dead" — which turns the most
+ * important interaction on a checkout page into the loudest false alarm in the
+ * report. Focus landing on (or inside) the clicked element is proof the click
+ * did something, even though the page looks identical afterwards.
+ */
+function focusLanded(target: Element | null, activeBefore: Element | null): boolean {
+  const active = document.activeElement;
+  if (!active || active === document.body) return false;
+  if (active !== activeBefore) return true;
+  return target ? active === target || target.contains(active) : false;
+}
+
+/**
+ * Elements whose whole purpose is to receive input. Clicking one is meaningful
+ * by definition, so they are never reported as dead even if focus was already
+ * there (clicking a field you are already typing in, for instance).
+ */
+function isInteractive(el: Element | null): boolean {
+  if (!el) return false;
+  const tag = el.tagName;
+  return (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    tag === "OPTION" ||
+    tag === "LABEL" ||
+    (el as HTMLElement).isContentEditable === true
+  );
+}
+
 function installClicks(emit: Emit): void {
   const recent: { x: number; y: number; t: number }[] = [];
 
@@ -75,17 +109,23 @@ function installClicks(emit: Emit): void {
       const rage = near.length >= RAGE_MIN;
 
       const target = e.target as Element | null;
-      const domBefore = document.documentElement.innerHTML.length;
+      // Node count rather than serialized HTML: innerHTML.length stringifies the
+      // entire document on every click (twice), which is a real cost on the
+      // visitor's device for a signal that only needs "did the page change".
+      const nodesBefore = document.getElementsByTagName("*").length;
       const urlBefore = location.href;
+      const activeBefore = document.activeElement;
 
-      // Dead: no DOM change and no navigation shortly after the click.
+      // Dead: no DOM change, no navigation and no focus landing shortly after.
       let settled = false;
       const markDead = () => {
         if (settled) return;
         settled = true;
         const dead =
           location.href === urlBefore &&
-          Math.abs(document.documentElement.innerHTML.length - domBefore) < 8;
+          Math.abs(document.getElementsByTagName("*").length - nodesBefore) < 3 &&
+          !focusLanded(target, activeBefore) &&
+          !isInteractive(target);
         send(dead);
       };
 
