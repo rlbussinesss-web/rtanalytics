@@ -17,6 +17,7 @@ import { getPropensityModel } from "./model.js";
 import { listSites } from "./sites.js";
 import { discoverFunnel } from "./discovery.js";
 import { listHighlights } from "./highlights.js";
+import { computeAutopsy } from "./autopsy.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames, getSessionMarkers } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
@@ -86,6 +87,17 @@ app.get("/api/sites/:siteId/insights", async (req) => {
   const q = req.query as { range?: string };
   const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "24h";
   return computeInsights(siteId, range);
+});
+
+/**
+ * What visitors were looking at when they gave up, grouped into objections.
+ * Defaults to 7 days: abandonment patterns need volume to separate from noise.
+ */
+app.get("/api/sites/:siteId/autopsy", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string };
+  const range: RangeKey = q.range === "24h" || q.range === "30d" ? q.range : "7d";
+  return computeAutopsy(siteId, range);
 });
 
 app.get("/api/sites/:siteId/discovery", async (req) => {
