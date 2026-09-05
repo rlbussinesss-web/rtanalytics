@@ -1221,3 +1221,45 @@ body {
 .hl-top b { font-size: 13px; font-weight: 600; }
 .hl-meta { font-family: var(--mono); font-size: 11px; color: var(--text-faint); }
 .hl-reason { display: block; font-size: 12.5px; color: var(--text-muted); margin-top: 6px; line-height: 1.45; }
+
+/* ---- Autópsia de abandono ---- */
+.ap-summary { font-size: 13.5px; color: var(--text-muted); margin-bottom: 16px; }
+.ap-summary b { color: var(--text); font-family: var(--mono); }
+.ap-note { color: var(--text-faint); }
+.ap-empty, .ap-warn { padding: 22px; margin-bottom: 14px; }
+.ap-empty b { font-size: 14px; }
+.ap-empty p { margin: 6px 0 0; font-size: 13px; color: var(--text-muted); line-height: 1.55; max-width: 62ch; }
+.ap-warn { font-size: 13px; color: var(--text-muted); line-height: 1.55; border-color: var(--accent-ring); }
+.ap-warn code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+.ap-card { padding: 20px 22px; margin-bottom: 12px; }
+.ap-kind {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--accent); font-weight: 600;
+}
+.ap-kind svg { flex: none; }
+.ap-path { color: var(--text-faint); letter-spacing: 0; text-transform: none; margin-left: 4px; }
+.ap-label {
+  margin: 12px 0 10px; font-size: 19px; font-weight: 600; letter-spacing: -0.02em;
+  line-height: 1.35; text-wrap: balance;
+}
+.ap-verdict { margin: 0; font-size: 13.5px; color: var(--text-muted); }
+.ap-verdict b { color: var(--text); font-family: var(--mono); }
+.ap-cost {
+  display: flex; gap: 18px; align-items: baseline; margin-top: 12px;
+  padding-top: 12px; border-top: 1px solid var(--border);
+  font-family: var(--mono); font-size: 12.5px; color: var(--text-muted);
+}
+.ap-cost b { color: var(--text); }
+.ap-money { color: var(--accent); font-weight: 600; }
+.ap-proof {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+  font-size: 12px; color: var(--text-faint);
+}
+.ap-watch {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+  font-family: var(--mono); font-size: 11.5px; color: var(--text);
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 4px 9px;
+}
+.ap-watch:hover { border-color: var(--border-strong); background: var(--surface-3); }

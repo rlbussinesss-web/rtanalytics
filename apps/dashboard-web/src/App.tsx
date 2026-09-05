@@ -8,6 +8,7 @@ import { useSites } from "./useSites";
 import { LiveScreen } from "./LiveScreen";
 import { MetricsPanel } from "./MetricsPanel";
 import { AudiencePanel } from "./AudiencePanel";
+import { AutopsyPanel } from "./AutopsyPanel";
 import { FunnelPanel } from "./FunnelPanel";
 import { HeatmapView } from "./HeatmapView";
 import { ReplaysPanel } from "./ReplaysPanel";
@@ -179,6 +180,14 @@ function Dashboard({
             )}
             {view === "audience" && (
               <AudiencePanel siteId={siteId} range={range} onRangeChange={setRange} />
+            )}
+            {view === "autopsy" && (
+              <AutopsyPanel
+                siteId={siteId}
+                range={range}
+                onRangeChange={setRange}
+                onWatch={setWatching}
+              />
             )}
             {view === "heatmaps" && (
               <>

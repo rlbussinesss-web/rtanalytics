@@ -11,6 +11,7 @@ import {
   PlayCircle,
   Sun,
   Trophy,
+  Stethoscope,
 } from "lucide-react";
 import type { ViewKey } from "./Sidebar";
 import type { SiteSummary } from "../useSites";
@@ -23,6 +24,7 @@ import type { SiteSummary } from "../useSites";
 const LENSES: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: "live", label: "Ao Vivo", icon: <Activity /> },
   { key: "audience", label: "Público", icon: <Trophy /> },
+  { key: "autopsy", label: "Autópsia", icon: <Stethoscope /> },
   { key: "funnel", label: "Jornada", icon: <Filter /> },
   { key: "metrics", label: "Métricas", icon: <BarChart3 /> },
   { key: "heatmaps", label: "Mapas", icon: <Flame /> },
