@@ -1,0 +1,132 @@
+name: rtanalytics
+
+# Full stack for a single always-on machine (an Oracle Cloud Always Free VM, or
+# any Linux box). Everything the platform used to provide managed — Postgres,
+# Redis, TLS — runs here as a container, which is what makes the whole thing
+# cost nothing.
+#
+#   cd infra && cp .env.prod.example .env && nano .env
+#   docker compose -f docker-compose.prod.yml up -d --build
+#
+# Caddy terminates HTTPS with certificates it obtains and renews on its own.
+# That is not a nicety: the tracker runs on an https page, and browsers refuse a
+# plain ws:// connection from one, so without a real certificate no data would
+# ever arrive.
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: rta-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      INGEST_DOMAIN: ${INGEST_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+    depends_on:
+      - ingest
+      - dashboard-api
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: rta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    # Not published to the internet: only the containers on this network reach
+    # it, so the database has no public attack surface at all.
+    expose:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: rta-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  ingest:
+    build:
+      context: ..
+      dockerfile: apps/ingest/Dockerfile
+    container_name: rta-ingest
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      REDIS_URL: redis://redis:6379
+      # Left empty on purpose: projects created in the dashboard register their
+      # own keys in Redis, so this no longer has to be edited per offer.
+      ALLOWED_SITE_IDS: ${ALLOWED_SITE_IDS:-}
+      SERVER_INGEST_KEY: ${SERVER_INGEST_KEY:-}
+    expose:
+      - "8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  dashboard-api:
+    build:
+      context: ..
+      dockerfile: apps/dashboard-api/Dockerfile
+    container_name: rta-api
+    restart: unless-stopped
+    environment:
+      PORT: 8080
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      DASHBOARD_TOKEN: ${DASHBOARD_TOKEN}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+    expose:
+      - "8080"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  workers:
+    build:
+      context: ..
+      dockerfile: apps/workers/Dockerfile
+    container_name: rta-workers
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@timescaledb:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      # Optional: traffic spike alerts stay off until both are set.
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      DASHBOARD_URL: ${DASHBOARD_URL:-}
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  timescale_data:
+  redis_data:
+  caddy_data:
+  caddy_config:

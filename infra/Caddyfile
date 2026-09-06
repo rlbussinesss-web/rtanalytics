@@ -1,0 +1,21 @@
+# Automatic HTTPS for the two public entry points.
+#
+# Caddy obtains and renews Let's Encrypt certificates on its own, which is the
+# whole reason it is here: the tracker runs on an https page, and a browser will
+# refuse a plain ws:// connection from one. Without a real certificate the
+# tracker would connect to nothing and no data would ever arrive.
+#
+# Two separate hostnames rather than paths on one, because the ingest and the
+# API both answer on /healthz and /api — sharing a hostname would make routing
+# ambiguous exactly where mistakes are hardest to notice.
+
+{$INGEST_DOMAIN} {
+	encode zstd gzip
+	# WebSocket upgrades pass through untouched; this is the tracker's endpoint.
+	reverse_proxy ingest:8080
+}
+
+{$API_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy dashboard-api:8080
+}
