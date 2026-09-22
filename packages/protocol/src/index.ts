@@ -123,6 +123,45 @@ export const conversionSchema = z.object({
   payload: z.object({
     name: z.string().min(1).max(128),
     value: z.number().optional(),
+    // Ad attribution fields injected by the ingest server when a cached
+    // gclid/fbclid/ttclid exists for this session. Optional because browser-
+    // reported conversions (if any) will not carry them.
+    adClickId: z.string().max(200).optional(),
+    adPlatform: z.enum(["google", "meta", "tiktok", "bing"]).optional(),
+  }),
+});
+
+/**
+ * Periodic intent score snapshot computed client-side from behavioural
+ * signals (scroll depth, time on page, interaction count, rage/dead clicks).
+ * Lets the dashboard filter "high-intent sessions that did NOT convert" —
+ * the hottest remarketing audience and the clearest friction signal.
+ */
+export const intentScoreSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("intent-score"),
+  payload: z.object({
+    score: z.number().int().min(0).max(100),
+    maxScrollPct: z.number().min(0).max(100),
+    sessionDurationSec: z.number().nonnegative(),
+    interactionCount: z.number().int().nonnegative(),
+    rageClicks: z.number().int().nonnegative(),
+    deadClicks: z.number().int().nonnegative(),
+  }),
+});
+
+/**
+ * Internal event published by the ingest server when a pageview carries an
+ * ad click id (gclid/fbclid/ttclid/msclkid). Not sent by the browser tracker;
+ * consumed exclusively by the persist-worker to durably write session_ad_clicks
+ * so attribution survives Redis restarts and key expiry.
+ */
+export const adClickSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("ad-click"),
+  payload: z.object({
+    adClickId: z.string().min(1).max(200),
+    platform: z.enum(["google", "meta", "tiktok", "bing"]),
   }),
 });
 
@@ -187,10 +226,14 @@ export const trackerEventSchema = z.discriminatedUnion("eventType", [
   errorSchema,
   replayChunkSchema,
   conversionSchema,
+  intentScoreSchema,
+  adClickSchema,
   visibilitySchema,
   viewportSchema,
   pageMapSchema,
 ]);
+
+export type IntentScoreEvent = z.infer<typeof intentScoreSchema>;
 
 export type PageviewEvent = z.infer<typeof pageviewSchema>;
 export type HeartbeatEvent = z.infer<typeof heartbeatSchema>;

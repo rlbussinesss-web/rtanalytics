@@ -4,7 +4,15 @@ import type { WebSocket } from "ws";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { parseTrackerEvent } from "@rtanalytics/protocol";
 import { publishEvent, recordReplayChunk } from "./stream.js";
-import { touchPresence, publishLiveEvent, publishReplayChunk, readAllowedSites } from "./redis.js";
+import {
+  touchPresence,
+  publishLiveEvent,
+  publishReplayChunk,
+  readAllowedSites,
+  storeAdClick,
+  getAdClick,
+  tryAcquireConversionLock,
+} from "./redis.js";
 import { registerSession, unregisterSession, connectionCount, subscribeToCommands } from "./sessions.js";
 import { enrichFromConnection } from "./enrich.js";
 import type { EnrichedFields } from "@rtanalytics/shared-types";
@@ -145,6 +153,42 @@ app.post("/api/server-event", async (req, reply) => {
     return reply.code(400).send({ error: "missing visitorId, sessionId or name" });
   }
 
+  // Dedup: absorb gateway retries so a single confirmed payment cannot inflate
+  // revenue. The lock is per (session, name, value) within a 5-minute window —
+  // short enough to allow legitimate repeat purchases, long enough to catch
+  // duplicate webhook deliveries.
+  const conversionName = String(b.name).slice(0, 128);
+  const conversionValue = typeof b.value === "number" ? b.value : undefined;
+  let dedupFailOpen = false;
+  const acquired = await tryAcquireConversionLock(
+    b.siteId,
+    b.sessionId,
+    conversionName,
+    conversionValue
+  ).catch((err) => {
+    // METRIC: track fail-open events so Redis instability is visible before
+    // it silently inflates revenue. A sustained spike in this counter means
+    // the dedup layer is degraded and duplicates are likely slipping through.
+    dedupFailOpen = true;
+    app.log.warn(
+      { err, siteId: b.siteId, sessionId: b.sessionId, name: conversionName },
+      "conversion_dedup_failopen_total: dedup check failed; proceeding without lock"
+    );
+    return true; // fail-open: better to risk a duplicate than lose a real sale
+  });
+  if (!acquired) {
+    app.log.info({ sessionId: b.sessionId, name: conversionName }, "duplicate conversion suppressed");
+    return { ok: true, deduplicated: true };
+  }
+
+  // Attribute the conversion back to the original ad click. The pageview cached
+  // the gclid/fbclid/ttclid when the session started; without this lookup the
+  // server-side event would land with no link to the campaign that drove it.
+  const adClick = await getAdClick(b.siteId, b.sessionId).catch((err) => {
+    app.log.warn({ err }, "ad click lookup failed");
+    return null;
+  });
+
   const event = {
     schemaVersion: 1 as const,
     eventId: randomUUID(),
@@ -155,8 +199,12 @@ app.post("/api/server-event", async (req, reply) => {
     timestamp: Date.now(),
     path: (b.path ?? "(servidor)").slice(0, 2048),
     payload: {
-      name: String(b.name).slice(0, 128),
-      value: typeof b.value === "number" ? b.value : undefined,
+      name: conversionName,
+      value: conversionValue,
+      ...(adClick && {
+        adClickId: adClick.adClickId,
+        adPlatform: adClick.platform,
+      }),
     },
   };
 
@@ -172,7 +220,10 @@ app.post("/api/server-event", async (req, reply) => {
       app.log.warn({ err }, "server-event live publish failed")
     ),
   ]);
-  app.log.info({ sessionId: event.sessionId, name: event.payload.name }, "server conversion recorded");
+  app.log.info(
+    { sessionId: event.sessionId, name: event.payload.name, attributed: !!adClick },
+    "server conversion recorded"
+  );
   return { ok: true };
 });
 
@@ -258,6 +309,47 @@ async function handleMessage(
   if (event.eventType === "pageview" && event.payload.wd === true && !enrichment.isBot) {
     enrichment.isBot = true;
     enrichment.botReason = "webdriver";
+  }
+
+  // Cache ad click id (gclid/fbclid/ttclid/msclkid) from pageview so that
+  // server-side conversions arriving hours later can be attributed back to
+  // the original ad without depending on UTMs surviving the payment flow.
+  if (event.eventType === "pageview" && !enrichment.isBot) {
+    const p = event.payload;
+    const adClickId = p.gclid ?? p.fbclid ?? p.ttclid ?? p.msclkid;
+    const platform = p.gclid
+      ? "google"
+      : p.fbclid
+        ? "meta"
+        : p.ttclid
+          ? "tiktok"
+          : p.msclkid
+            ? "bing"
+            : null;
+    if (adClickId && platform) {
+      // Fast path: Redis cache for same-session conversions arriving within
+      // the TTL window (24h). The durable copy is published to the events
+      // stream so the persist-worker can INSERT into session_ad_clicks — that
+      // survives Redis restarts and key expiry for historical attribution.
+      await Promise.all([
+        storeAdClick(event.siteId, event.sessionId, { adClickId, platform }).catch((err) =>
+          app.log.warn({ err }, "failed to cache ad click id in redis")
+        ),
+        publishEvent(event.siteId, "ad-click", {
+          schemaVersion: 1,
+          eventId: randomUUID(),
+          siteId: event.siteId,
+          sessionId: event.sessionId,
+          visitorId: event.visitorId,
+          eventType: "ad-click",
+          timestamp: Date.now(),
+          path: event.path,
+          payload: { adClickId, platform },
+        }).catch((err) =>
+          app.log.warn({ err }, "failed to publish ad-click for durable storage")
+        ),
+      ]);
+    }
   }
 
   // Replay frames take a different path: they are high-volume, only useful to

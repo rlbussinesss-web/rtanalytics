@@ -180,3 +180,28 @@ export async function upsertPageMap(row: PageMapRow): Promise<void> {
     [row.siteId, row.path, row.structureHash, row.height, row.width, JSON.stringify(row.blocks)]
   );
 }
+
+export interface AdClickRow {
+  siteId: string;
+  sessionId: string;
+  adClickId: string;
+  platform: "google" | "meta" | "tiktok" | "bing";
+}
+
+/**
+ * Persists the ad click id for a session so that server-side conversions
+ * arriving hours later can be attributed back to the original gclid/fbclid/
+ * ttclid even if Redis has been flushed or the key expired.
+ *
+ * Uses ON CONFLICT DO NOTHING because the first pageview in a session is the
+ * authoritative source — subsequent pageviews from the same session (e.g.
+ * SPA navigation) must not overwrite the original attribution.
+ */
+export async function upsertAdClick(row: AdClickRow): Promise<void> {
+  await getPool().query(
+    `INSERT INTO session_ad_clicks (site_id, session_id, ad_click_id, platform)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (site_id, session_id) DO NOTHING`,
+    [row.siteId, row.sessionId, row.adClickId, row.platform]
+  );
+}

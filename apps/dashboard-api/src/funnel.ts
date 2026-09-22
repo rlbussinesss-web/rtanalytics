@@ -41,23 +41,31 @@ async function sessionsForStep(
   siteId: string,
   interval: string,
   step: FunnelStepInput
-): Promise<Set<string>> {
+): Promise<Map<string, number>> {
   const since = `now() - interval '${interval}'`;
+  // Use MIN(time) so we can enforce ordering: a session only counts at step N
+  // if it reached step N *after* reaching every previous step. Without this,
+  // a visitor who jumped straight to checkout would inflate every earlier step
+  // and mask the real drop-off points.
   const rows =
     step.kind === "event"
-      ? await query<{ session_id: string }>(
-          `SELECT DISTINCT session_id FROM events
+      ? await query<{ session_id: string; first_at: string }>(
+          `SELECT session_id, min(time) AS first_at FROM events
             WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
-              AND event_type = 'conversion' AND payload->>'name' = $2`,
+              AND event_type = 'conversion' AND payload->>'name' = $2
+            GROUP BY session_id`,
           [siteId, step.value]
         )
-      : await query<{ session_id: string }>(
-          `SELECT DISTINCT session_id FROM events
+      : await query<{ session_id: string; first_at: string }>(
+          `SELECT session_id, min(time) AS first_at FROM events
             WHERE site_id = $1 AND is_bot IS NOT TRUE AND time >= ${since}
-              AND event_type = 'pageview' AND path = $2`,
+              AND event_type = 'pageview' AND path = $2
+            GROUP BY session_id`,
           [siteId, step.value]
         );
-  return new Set(rows.map((r) => r.session_id));
+  const map = new Map<string, number>();
+  for (const r of rows) map.set(r.session_id, new Date(r.first_at).getTime());
+  return map;
 }
 
 export async function computeFunnel(
@@ -71,17 +79,30 @@ export async function computeFunnel(
   );
 
   const results: FunnelStepResult[] = [];
-  let reached: Set<string> | null = null;
+  // `reached` tracks sessions that made it through every prior step *in order*,
+  // along with the timestamp at which they completed the last step. A session
+  // only advances to step N if its first_at for step N is strictly after the
+  // timestamp recorded for step N-1 — this prevents a direct-to-checkout visit
+  // from inflating earlier steps and masking the real drop-off.
+  let reached: Map<string, number> | null = null;
   let firstCount = 0;
   let prevCount = 0;
 
   steps.forEach((step, i) => {
-    const set = stepSets[i]!;
-    // Cumulative: sessions present at this step AND all previous ones.
-    reached =
-      reached === null
-        ? set
-        : new Set([...reached].filter((id) => set.has(id)));
+    const stepMap = stepSets[i]!;
+
+    if (reached === null) {
+      reached = stepMap;
+    } else {
+      const next = new Map<string, number>();
+      for (const [sessionId, prevTime] of reached) {
+        const stepTime = stepMap.get(sessionId);
+        if (stepTime !== undefined && stepTime > prevTime) {
+          next.set(sessionId, stepTime);
+        }
+      }
+      reached = next;
+    }
 
     const count = reached.size;
     if (i === 0) firstCount = count;

@@ -44,6 +44,8 @@ const DIMENSIONS: Record<string, string> = {
   source: "payload->>'utm_source'",
   medium: "payload->>'utm_medium'",
   campaign: "payload->>'utm_campaign'",
+  content: "payload->>'utm_content'",
+  term: "payload->>'utm_term'",
   country: "country",
   region: "region",
   device: "device",

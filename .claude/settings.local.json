@@ -3,5 +3,10 @@
     "allow": [
       "mcp__playwright__browser_tabs"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "playwright",
+    "aidesigner",
+    "railway"
+  ]
 }

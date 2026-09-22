@@ -9,7 +9,7 @@
  * marginally; losing one is worse).
  */
 import { Redis } from "ioredis";
-import { insertEventsBatch, upsertPageMap, type EventInsertRow } from "./db.js";
+import { insertEventsBatch, upsertPageMap, upsertAdClick, type EventInsertRow } from "./db.js";
 import { runMigrations } from "./migrate.js";
 import { runReplayConsumer } from "./replay-consumer.js";
 import { runAlertsWorker } from "./alerts-worker.js";
@@ -168,6 +168,30 @@ async function main(): Promise<void> {
               await redis.xack(STREAM, GROUP, id);
             } catch (err) {
               console.error("[persist-worker] page map store failed, leaving unacked", err);
+            }
+            continue;
+          }
+
+          // Ad-click events carry the gclid/fbclid/ttclid captured at pageview
+          // time. They are persisted durably so server-side conversions arriving
+          // hours later can be attributed even after Redis key expiry. Like
+          // page-maps, they are handled out-of-band from the event batch because
+          // they write to a separate table with its own conflict semantics.
+          if (parsed.eventType === "ad-click") {
+            const p = parsed.payload as {
+              adClickId: string;
+              platform: "google" | "meta" | "tiktok" | "bing";
+            };
+            try {
+              await upsertAdClick({
+                siteId: String(parsed.siteId),
+                sessionId: String(parsed.sessionId),
+                adClickId: p.adClickId,
+                platform: p.platform,
+              });
+              await redis.xack(STREAM, GROUP, id);
+            } catch (err) {
+              console.error("[persist-worker] ad-click store failed, leaving unacked", err);
             }
             continue;
           }

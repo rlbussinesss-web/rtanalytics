@@ -22,6 +22,137 @@ export function installBehavior(emit: Emit): void {
   installErrors(emit);
   installVitals(emit);
   installVisibility(emit);
+  installIntentScore(emit);
+}
+
+// ----------------------------------------------------------- intent score
+/**
+ * Periodic snapshot of purchase intent, computed entirely client-side from
+ * behavioural signals already being captured. The score is not a prediction
+ * model — it is a weighted heuristic that turns raw scroll/click/error data
+ * into a single 0-100 number the dashboard can filter on.
+ *
+ * Why this matters for paid traffic: a session with score 85 that did NOT
+ * convert is the hottest remarketing audience and the clearest friction
+ * signal. Without it, every non-converting session looks identical.
+ *
+ * Weights are tuned for e-commerce / offer pages where scroll depth and
+ * interaction count are stronger buy signals than time-on-page alone.
+ */
+const INTENT_FLUSH_MS = 15_000; // snapshot every 15s
+
+interface IntentState {
+  startedAt: number;
+  maxScrollPct: number;
+  interactionCount: number;
+  rageClicks: number;
+  deadClicks: number;
+  timer: ReturnType<typeof setInterval> | null;
+  disposed: boolean;
+}
+
+// Module-level singleton prevents duplicate installations when the tracker is
+// re-initialized (e.g. SPA route change that re-runs installBehavior without
+// a full page reload). Without this guard, each reinstall would add another
+// pair of scroll/click listeners and another setInterval, leaking memory and
+// inflating interaction counts linearly over time.
+let intentState: IntentState | null = null;
+
+function disposeIntentScore(): void {
+  if (!intentState) return;
+  intentState.disposed = true;
+  if (intentState.timer !== null) clearInterval(intentState.timer);
+  intentState.timer = null;
+  intentState = null;
+}
+
+function installIntentScore(emit: Emit): void {
+  // Idempotent: tear down any previous instance before creating a new one.
+  // This is safe to call multiple times and ensures exactly one set of
+  // listeners and one interval exist at any point.
+  disposeIntentScore();
+
+  const state: IntentState = {
+    startedAt: Date.now(),
+    maxScrollPct: 0,
+    interactionCount: 0,
+    rageClicks: 0,
+    deadClicks: 0,
+    timer: null,
+    disposed: false,
+  };
+  intentState = state;
+
+  const onScroll = () => {
+    if (state.disposed) return;
+    const doc = document.documentElement;
+    const scrollable = doc.scrollHeight - window.innerHeight;
+    if (scrollable > 0) {
+      const depth = Math.min(100, Math.round((window.scrollY / scrollable) * 100));
+      if (depth > state.maxScrollPct) state.maxScrollPct = depth;
+    }
+  };
+
+  const onClick = (e: MouseEvent) => {
+    if (state.disposed) return;
+    state.interactionCount += 1;
+    const target = e.target as Element | null;
+    if (target) {
+      const tag = target.tagName;
+      const interactive =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        tag === "BUTTON" ||
+        tag === "A";
+      if (!interactive) {
+        state.deadClicks += 1;
+      }
+    }
+  };
+
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("click", onClick, { passive: true, capture: true });
+
+  const flush = () => {
+    if (state.disposed) return;
+    const durationSec = Math.round((Date.now() - state.startedAt) / 1000);
+    // Weighted formula: scroll depth (30%) + interactions capped at 20 (25%)
+    // + time-on-page capped at 120s (25%) + rage penalty (-10 each) + dead
+    // penalty (-3 each). Clamped to [0, 100].
+    const scrollPts = Math.min(state.maxScrollPct, 100) * 0.3;
+    const interactPts = Math.min(state.interactionCount, 20) * (25 / 20);
+    const timePts = Math.min(durationSec, 120) * (25 / 120);
+    const penalties = state.rageClicks * 10 + state.deadClicks * 3;
+    const score = Math.max(0, Math.min(100, Math.round(scrollPts + interactPts + timePts - penalties)));
+
+    emit("intent-score", {
+      score,
+      maxScrollPct: state.maxScrollPct,
+      sessionDurationSec: durationSec,
+      interactionCount: state.interactionCount,
+      rageClicks: state.rageClicks,
+      deadClicks: state.deadClicks,
+    });
+  };
+
+  state.timer = setInterval(flush, INTENT_FLUSH_MS);
+
+  // Final snapshot on page leave so short sessions still get scored.
+  const onPageHide = () => {
+    if (!state.disposed) flush();
+  };
+  const onVisibility = () => {
+    if (!state.disposed && document.visibilityState === "hidden") flush();
+  };
+
+  window.addEventListener("pagehide", onPageHide, { once: true });
+  document.addEventListener("visibilitychange", onVisibility);
+
+  // Expose cleanup so the tracker can tear down on SPA unmount or hot-reload.
+  // The next call to installIntentScore will also call disposeIntentScore,
+  // but explicit cleanup avoids a brief window with double listeners.
+  (window as unknown as Record<string, unknown>).__rta_dispose_intent = disposeIntentScore;
 }
 
 // ------------------------------------------------------------- visibility
