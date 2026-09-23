@@ -1389,3 +1389,74 @@ body {
 .inst-help ul { margin: 0; padding-left: 18px; }
 .inst-help li { font-size: 13px; color: var(--text-muted); line-height: 1.65; margin-bottom: 8px; }
 .inst-help code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+/* ---- Install wizard: platform grid ---- */
+.inst-platforms { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.inst-plat {
+  display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 10px;
+  background: var(--surface-1); border: 1px solid var(--border); cursor: pointer;
+  font-size: 13.5px; font-weight: 500; color: var(--text-muted); transition: all .15s ease;
+}
+.inst-plat:hover { border-color: var(--border-strong); color: var(--text); }
+.inst-plat.active { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.inst-plat-icon { font-size: 16px; line-height: 1; }
+.inst-plat-label { white-space: nowrap; }
+
+/* ---- Install wizard: guide content ---- */
+.inst-guide { margin-top: 14px; padding: 18px 20px; border-radius: 12px; background: var(--surface-1); border: 1px solid var(--border); }
+.inst-guide h4 { font-size: 15px; font-weight: 620; margin: 0 0 8px; letter-spacing: -0.01em; }
+.inst-guide ol { margin: 0 0 16px; padding-left: 20px; }
+.inst-guide li { font-size: 13.5px; color: var(--text-muted); line-height: 1.65; margin-bottom: 6px; }
+.inst-guide p { font-size: 13.5px; color: var(--text-muted); line-height: 1.65; margin: 0 0 12px; max-width: 62ch; }
+.inst-guide code { font-family: var(--mono); font-size: 12px; color: var(--accent); background: var(--accent-soft); padding: 1px 5px; border-radius: 5px; }
+.inst-placeholder { font-size: 13.5px; color: var(--text-faint); font-style: italic; margin-top: 8px; }
+
+/* ---- Install wizard: HTML example ---- */
+.inst-html-example pre {
+  margin: 0 0 14px; padding: 14px 16px; border-radius: 10px; overflow-x: auto;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--text-muted);
+}
+
+/* ---- Install wizard: advanced accordion ---- */
+.inst-advanced { margin-top: 14px; }
+.inst-advanced summary { font-size: 13px; font-weight: 600; color: var(--accent); cursor: pointer; list-style: none; }
+.inst-advanced summary::-webkit-details-marker { display: none; }
+.inst-advanced summary::before { content: "▸ "; }
+.inst-advanced[open] summary::before { content: "▾ "; }
+.inst-advanced pre {
+  margin: 10px 0 0; padding: 14px 16px; border-radius: 10px; overflow-x: auto;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--text);
+}
+.inst-code-block {
+  margin: 10px 0 14px; padding: 14px 16px; border-radius: 10px; overflow-x: auto;
+  background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--text);
+}
+
+/* ---- Install wizard: snippet block ---- */
+.inst-snippet-wrap { margin-top: 14px; }
+.inst-snippet-note { font-size: 12px; color: var(--warning); margin-top: 8px !important; }
+
+/* ---- Install wizard: success banner ---- */
+.inst-success-banner {
+  display: flex; align-items: center; gap: 14px; padding: 16px 20px; border-radius: 12px;
+  background: var(--live-soft); border: 1px solid var(--live); margin-bottom: 22px;
+}
+.inst-success-banner svg { flex: none; color: var(--live); }
+.inst-success-banner b { display: block; font-size: 14px; font-weight: 620; margin-bottom: 2px; }
+.inst-success-banner span { font-size: 12.5px; color: var(--text-muted); }
+
+/* ---- Install wizard: diagnostic panel ---- */
+.inst-diag { margin-top: 18px; padding: 16px 18px; border-radius: 12px; background: var(--surface-1); border: 1px solid var(--border); }
+.inst-diag-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.inst-diag-head h4 { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 620; margin: 0; }
+.inst-diag-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.inst-diag-list li {
+  display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-muted);
+}
+.inst-diag-list li.ok svg { color: var(--live); flex: none; margin-top: 1px; }
+.inst-diag-list li.pending svg { color: var(--text-faint); flex: none; margin-top: 1px; }
+.inst-diag-list b { display: block; font-size: 13px; font-weight: 600; color: var(--text); }
+.inst-diag-list small { display: block; font-size: 12px; color: var(--text-faint); margin-top: 1px; }
