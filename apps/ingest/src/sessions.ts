@@ -34,6 +34,11 @@ export function connectionCount(): number {
   return sockets.size;
 }
 
+/** Session ids currently registered on this instance (debug only). */
+export function registeredSessionIds(): string[] {
+  return Array.from(sockets.keys());
+}
+
 export function subscribeToCommands(redisUrl: string, log: (msg: string) => void): Redis {
   const subscriber = new Redis(redisUrl);
 

@@ -87,6 +87,11 @@ export type PageMapEvent = TrackerEventEnvelope<
   }
 >;
 
+export type ErrorEvent = TrackerEventEnvelope<
+  "error",
+  { message: string; stack?: string; filename?: string; lineno?: number }
+>;
+
 export type AnyTrackerEvent =
   | PageviewEvent
   | HeartbeatEvent
@@ -96,4 +101,5 @@ export type AnyTrackerEvent =
   | ConversionEvent
   | VisibilityEvent
   | ViewportEvent
-  | PageMapEvent;
+  | PageMapEvent
+  | ErrorEvent;

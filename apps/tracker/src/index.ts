@@ -72,13 +72,25 @@ class RTATracker {
     this.visitorId = getVisitorId();
     this.sessionId = getSessionId();
     this.transport = new Transport(config.wsUrl);
-    this.recorder = new Recorder(config.recorderUrl, (frames, seq) => {
-      this.transport.send({
-        ...this.baseEnvelope(),
-        eventType: "replay-chunk",
-        payload: { frames, seq },
-      });
-    });
+    this.recorder = new Recorder(
+      config.recorderUrl,
+      (frames, seq) => {
+        this.transport.send({
+          ...this.baseEnvelope(),
+          eventType: "replay-chunk",
+          payload: { frames, seq },
+        });
+      },
+      (error) => {
+        // Send recorder failures as error events so they appear in server
+        // logs and the dashboard — console.error is invisible to us.
+        this.transport.send({
+          ...this.baseEnvelope(),
+          eventType: "error",
+          payload: { message: `[recorder] ${error}`, stack: "" },
+        });
+      }
+    );
   }
 
   private baseEnvelope(): Pick<

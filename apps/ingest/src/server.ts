@@ -13,7 +13,7 @@ import {
   getAdClick,
   tryAcquireConversionLock,
 } from "./redis.js";
-import { registerSession, unregisterSession, connectionCount, subscribeToCommands } from "./sessions.js";
+import { registerSession, unregisterSession, connectionCount, registeredSessionIds, subscribeToCommands } from "./sessions.js";
 import { enrichFromConnection } from "./enrich.js";
 import type { EnrichedFields } from "@rtanalytics/shared-types";
 
@@ -123,6 +123,13 @@ setInterval(() => void refreshRegisteredSites(), ALLOWED_REFRESH_MS);
 app.get("/healthz", async () => ({
   status: "ok",
   connections: connectionCount(),
+}));
+
+/** Debug-only: lists session ids whose WebSocket is currently held by this
+ *  instance. Lets us distinguish "command sent but no socket" from "socket
+ *  exists but tracker ignores the command". Never expose in public docs. */
+app.get("/debug/sessions", async () => ({
+  sessions: registeredSessionIds(),
 }));
 
 /**

@@ -80,7 +80,8 @@ export class Recorder {
 
   constructor(
     private readonly scriptUrl: string,
-    private readonly onChunk: (frames: unknown[], seq: number) => void
+    private readonly onChunk: (frames: unknown[], seq: number) => void,
+    private readonly onError?: (error: string) => void
   ) {}
 
   get isRecording(): boolean {
@@ -104,6 +105,14 @@ export class Recorder {
 
     try {
       await this.startInternal();
+    } catch (err) {
+      // startInternal already called onError for known failure modes. For any
+      // unexpected throw (e.g. rrweb.record() returning undefined), surface it
+      // here so the dashboard can diagnose from server logs rather than the
+      // visitor's invisible console.
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[rtanalytics] recorder start failed: ${msg}`);
+      this.onError?.(`recorder start failed: ${msg}`);
     } finally {
       this.starting = false;
     }
@@ -113,19 +122,22 @@ export class Recorder {
     try {
       await loadRrweb(this.scriptUrl);
     } catch (err) {
-      // Surface the failure so the dashboard can diagnose it from server logs.
-      console.error("[rtanalytics] recorder script failed to load:", err);
+      const msg = `recorder script failed to load: ${err instanceof Error ? err.message : String(err)}`;
+      console.error(`[rtanalytics] ${msg}`);
+      this.onError?.(msg);
       throw err;
     }
     const rrweb = window.rrweb;
     if (!rrweb) {
       const msg = "recorder loaded but window.rrweb is missing";
       console.error(`[rtanalytics] ${msg}`);
+      this.onError?.(msg);
       throw new Error(msg);
     }
     if (typeof rrweb.record !== "function") {
       const msg = `window.rrweb.record is not a function (got ${typeof rrweb.record})`;
       console.error(`[rtanalytics] ${msg}`);
+      this.onError?.(msg);
       throw new Error(msg);
     }
 
