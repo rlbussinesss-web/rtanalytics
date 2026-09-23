@@ -792,6 +792,9 @@ body {
   font-family: var(--mono); font-weight: 700; font-size: 14px;
   box-shadow: 0 0 0 1px var(--accent-ring), 0 6px 16px -8px var(--gold);
 }
+.cmd-logo {
+  width: 27px; height: 27px; object-fit: contain; flex: none;
+}
 .cmd-brand small {
   color: var(--text-muted); font-weight: 450; font-size: 11px;
   font-family: var(--mono); letter-spacing: 0.02em; margin-left: 2px;

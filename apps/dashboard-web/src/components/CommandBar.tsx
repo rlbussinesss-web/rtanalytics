@@ -64,8 +64,8 @@ export function CommandBar({
   return (
     <header className="cmdbar">
       <div className="cmd-brand">
-        <span className="cmd-mark">R</span>
-        RTA
+        <img src="/logo.svg" alt="Pathora" className="cmd-logo" />
+        Pathora
       </div>
 
       {/* Site switcher. Rendered only once more than one project reports data,

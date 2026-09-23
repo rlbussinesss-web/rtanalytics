@@ -29,7 +29,7 @@ const TRACKER_URL =
   "https://pathora.vercel.app/tracker.js";
 const INGEST_URL =
   (import.meta.env.VITE_INGEST_URL as string | undefined) ??
-  "wss://ingest-production-e15e.up.railway.app";
+  "wss://rta-ingest.duckdns.org";
 
 /** How often the page re-checks whether data has started arriving. */
 const CHECK_MS = 5000;
@@ -115,7 +115,7 @@ export function InstallPanel({ siteId }: { siteId: string }) {
       <header className="inst-head">
         <h2>Instalação</h2>
         <p>
-          Cole um código no seu site e o RTA começa a acompanhar os visitantes.
+          Cole um código no seu site e o Pathora começa a acompanhar os visitantes.
           Leva cerca de dois minutos.
         </p>
       </header>
@@ -198,7 +198,7 @@ export function InstallPanel({ siteId }: { siteId: string }) {
           <h3>Diga o que conta como venda</h3>
           <p>
             Informe o endereço da página que só aparece quando a pessoa converte — a tela de
-            pagamento, de Pix gerado ou de obrigado. É assim que o RTA sabe quem comprou.
+            pagamento, de Pix gerado ou de obrigado. É assim que o Pathora sabe quem comprou.
           </p>
           <div className="inst-conv">
             <input
