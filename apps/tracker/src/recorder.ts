@@ -110,9 +110,24 @@ export class Recorder {
   }
 
   private async startInternal(): Promise<void> {
-    await loadRrweb(this.scriptUrl);
+    try {
+      await loadRrweb(this.scriptUrl);
+    } catch (err) {
+      // Surface the failure so the dashboard can diagnose it from server logs.
+      console.error("[rtanalytics] recorder script failed to load:", err);
+      throw err;
+    }
     const rrweb = window.rrweb;
-    if (!rrweb) throw new Error("recorder loaded but window.rrweb is missing");
+    if (!rrweb) {
+      const msg = "recorder loaded but window.rrweb is missing";
+      console.error(`[rtanalytics] ${msg}`);
+      throw new Error(msg);
+    }
+    if (typeof rrweb.record !== "function") {
+      const msg = `window.rrweb.record is not a function (got ${typeof rrweb.record})`;
+      console.error(`[rtanalytics] ${msg}`);
+      throw new Error(msg);
+    }
 
     const stop = rrweb.record({
         emit: (event) => {
