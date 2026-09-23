@@ -58,11 +58,9 @@ export function Sidebar({
   return (
     <aside className={`sidebar${open ? " is-open" : ""}`}>
       <div className="brand-row">
-        <span className="brand-mark">
-          <Activity size={16} />
-        </span>
+        <img src="/logo.svg" alt="Pathora" className="brand-logo" />
         <span className="brand-name">
-          RTAnalytics<small>real-time</small>
+          Pathora<small>real-time</small>
         </span>
       </div>
 

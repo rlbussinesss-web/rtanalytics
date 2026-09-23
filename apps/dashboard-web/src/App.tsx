@@ -70,8 +70,8 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
     <div className="login-page">
       <form onSubmit={submit} className="card login-card">
         <div className="login-brand">
-          <span className="brand-mark"><Activity size={16} /></span>
-          <h1 className="login-title">RTAnalytics</h1>
+          <img src="/logo.svg" alt="Pathora" className="login-logo" />
+          <h1 className="login-title">Pathora</h1>
         </div>
         <p className="login-sub">Monitoramento de visitantes em tempo real</p>
         <input

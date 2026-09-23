@@ -2,7 +2,7 @@ import { AlertTriangle, Bug, MousePointer2, MoveVertical, ZapOff } from "lucide-
 import type { Metrics } from "../useMetrics";
 
 /**
- * Behaviour insights + performance, the RTAnalytics take on Clarity's
+ * Behaviour insights + performance, the Pathora take on Clarity's
  * "Insights" and "Performance" cards. Each frustration signal is a share of
  * sessions with a one-line explanation; Core Web Vitals show the p75 value
  * with its rating and an overall score.

@@ -25,7 +25,7 @@ interface Project {
 /** Where the tracker and ingest live, overridable per build. */
 const TRACKER_URL =
   (import.meta.env.VITE_TRACKER_URL as string | undefined) ??
-  "https://rtanalytics.vercel.app/tracker.js";
+  "https://pathora.vercel.app/tracker.js";
 const INGEST_URL =
   (import.meta.env.VITE_INGEST_URL as string | undefined) ??
   "wss://ingest-production-e15e.up.railway.app";

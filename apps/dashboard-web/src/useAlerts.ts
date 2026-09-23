@@ -61,7 +61,7 @@ export function useAlerts(events: LiveEvent[], onlineCount: number) {
     const alert: FiredAlert = { id: `${ruleId}-${Date.now()}-${Math.random()}`, ruleId, message, at: Date.now(), tone };
     setFired((prev) => [alert, ...prev].slice(0, 30));
     if (Notification?.permission === "granted") {
-      try { new Notification("RTAnalytics", { body: message }); } catch { /* ignore */ }
+      try { new Notification("Pathora", { body: message }); } catch { /* ignore */ }
     }
   };
 
