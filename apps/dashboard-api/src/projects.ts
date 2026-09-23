@@ -14,9 +14,17 @@ import { allowSite, disallowSite } from "./redis.js";
  * working and can be adopted by naming it.
  */
 
+/** A hostname detected from real events, with recency metadata. */
+export interface DetectedDomain {
+  host: string;
+  lastSeen: string;
+  sessions7d: number;
+}
+
 export interface Project {
   siteId: string;
   name: string;
+  /** @deprecated kept for backward compat; use detectedDomains instead. */
   domain: string | null;
   createdAt: string | null;
   /** URL that marks a conversion, e.g. "/pagamento". */
@@ -26,6 +34,8 @@ export interface Project {
   sessions7d: number;
   conversions7d: number;
   lastSeen: string | null;
+  /** Hostnames extracted from real events — the source of truth for where the tracker is installed. */
+  detectedDomains: DetectedDomain[];
 }
 
 /** Characters that are safe in an HTML attribute and readable in a URL. */
@@ -53,7 +63,7 @@ function makeSiteId(name: string): string {
 }
 
 export async function listProjects(): Promise<Project[]> {
-  const [rows, stats] = await Promise.all([
+  const [rows, stats, hostStats] = await Promise.all([
     query<{
       site_id: string;
       name: string;
@@ -71,34 +81,61 @@ export async function listProjects(): Promise<Project[]> {
       sessions: string;
       conversions: string;
       last_seen: Date;
-      host: string | null;
     }>(
       `SELECT site_id,
               count(DISTINCT session_id) FILTER (WHERE time >= now() - interval '7 days')::int AS sessions,
               count(DISTINCT session_id) FILTER (
                 WHERE event_type = 'conversion' AND time >= now() - interval '7 days'
               )::int AS conversions,
-              max(time) AS last_seen,
-              (array_agg(host ORDER BY time DESC) FILTER (WHERE host IS NOT NULL))[1] AS host
+              max(time) AS last_seen
          FROM events
         WHERE is_bot IS NOT TRUE AND time >= now() - interval '30 days'
         GROUP BY site_id`
     ),
+    // Detected domains: real hostnames from events, aggregated per site.
+    query<{
+      site_id: string;
+      host: string;
+      sessions: string;
+      last_seen: Date;
+    }>(
+      `SELECT site_id, host,
+              count(DISTINCT session_id)::int AS sessions,
+              max(time) AS last_seen
+         FROM events
+        WHERE host IS NOT NULL
+          AND is_bot IS NOT TRUE
+          AND time >= now() - interval '30 days'
+        GROUP BY site_id, host
+        ORDER BY site_id, last_seen DESC`
+    ),
   ]);
 
   const statBySite = new Map(stats.map((s) => [s.site_id, s]));
+  const domainsBySite = new Map<string, DetectedDomain[]>();
+  for (const d of hostStats) {
+    const list = domainsBySite.get(d.site_id) ?? [];
+    list.push({
+      host: d.host,
+      sessions7d: Number(d.sessions),
+      lastSeen: d.last_seen.toISOString(),
+    });
+    domainsBySite.set(d.site_id, list);
+  }
+
   const projects: Project[] = rows.map((r) => {
     const s = statBySite.get(r.site_id);
     return {
       siteId: r.site_id,
       name: r.name,
-      domain: r.domain ?? s?.host ?? null,
+      domain: r.domain,
       createdAt: r.created_at.toISOString(),
       conversionPath: r.conversion_path,
       discovered: false,
       sessions7d: Number(s?.sessions ?? 0),
       conversions7d: Number(s?.conversions ?? 0),
       lastSeen: s?.last_seen ? s.last_seen.toISOString() : null,
+      detectedDomains: domainsBySite.get(r.site_id) ?? [],
     };
   });
 
@@ -117,13 +154,14 @@ export async function listProjects(): Promise<Project[]> {
     projects.push({
       siteId: s.site_id,
       name: s.site_id,
-      domain: s.host,
+      domain: null,
       createdAt: null,
       conversionPath: null,
       discovered: true,
       sessions7d: Number(s.sessions),
       conversions7d: Number(s.conversions),
       lastSeen: s.last_seen ? s.last_seen.toISOString() : null,
+      detectedDomains: domainsBySite.get(s.site_id) ?? [],
     });
   }
 
@@ -168,6 +206,7 @@ export async function createProject(
     sessions7d: 0,
     conversions7d: 0,
     lastSeen: null,
+    detectedDomains: [],
   };
 }
 

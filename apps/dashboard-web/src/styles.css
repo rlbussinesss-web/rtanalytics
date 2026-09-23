@@ -1307,6 +1307,15 @@ body {
 .pj-domain { font-family: var(--mono); font-size: 11.5px; color: var(--text-faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pj-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted); }
 .pj-stats b { color: var(--text); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.pj-domains { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.pj-no-domain { font-size: 11.5px; color: var(--text-faint); font-style: italic; }
+.pj-domain { font-family: var(--mono); font-size: 11.5px; color: var(--accent); background: color-mix(in srgb, var(--accent) 12%, transparent); border-radius: 6px; padding: 2px 8px; }
+.pj-domain-multi { font-family: var(--mono); font-size: 11.5px; color: var(--text-muted); cursor: pointer; }
+.pj-domain-list { margin: 4px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
+.pj-domain-list li { font-family: var(--mono); font-size: 11px; color: var(--text-muted); padding: 2px 0; }
+.pj-domain-list li span { color: var(--text-faint); margin-left: 6px; font-size: 10px; }
+.pj-hint { font-size: 11.5px; color: var(--text-faint); margin-top: -4px; }
+.pj-empty-hint { font-size: 12px; color: var(--text-faint); text-align: center; padding: 24px 0; }
 .pj-tag {
   font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--warning); background: color-mix(in srgb, var(--warning) 14%, transparent);

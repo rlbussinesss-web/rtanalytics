@@ -11,6 +11,12 @@ import { API_BASE_URL, getToken } from "./token";
  * from the event log cannot exist yet.
  */
 
+interface DetectedDomain {
+  host: string;
+  lastSeen: string;
+  sessions7d: number;
+}
+
 interface Project {
   siteId: string;
   name: string;
@@ -20,6 +26,7 @@ interface Project {
   sessions7d: number;
   conversions7d: number;
   lastSeen: string | null;
+  detectedDomains: DetectedDomain[];
 }
 
 /** Where the tracker and ingest live, overridable per build. */
@@ -28,7 +35,7 @@ const TRACKER_URL =
   "https://pathora.vercel.app/tracker.js";
 const INGEST_URL =
   (import.meta.env.VITE_INGEST_URL as string | undefined) ??
-  "wss://ingest-production-e15e.up.railway.app";
+  "wss://rta-ingest.duckdns.org";
 
 function snippetFor(siteId: string): string {
   return `<script async src="${TRACKER_URL}"
@@ -62,7 +69,6 @@ export function ProjectsPanel({
   const [projects, setProjects] = useState<Project[] | null>(null);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
-  const [domain, setDomain] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Which project's install snippet is open. */
@@ -90,10 +96,9 @@ export function ProjectsPanel({
     try {
       const d = await api<{ project: Project }>("/api/projects", {
         method: "POST",
-        body: JSON.stringify({ name, domain }),
+        body: JSON.stringify({ name }),
       });
       setName("");
-      setDomain("");
       setCreating(false);
       await load();
       // Straight to the snippet: creating a project without showing what to
@@ -125,12 +130,12 @@ export function ProjectsPanel({
       if (p.discovered) {
         await api("/api/projects", {
           method: "POST",
-          body: JSON.stringify({ name: newName, domain: p.domain ?? undefined, siteId: p.siteId }),
+          body: JSON.stringify({ name: newName, siteId: p.siteId }),
         });
       } else {
         await api(`/api/projects/${encodeURIComponent(p.siteId)}`, {
           method: "PATCH",
-          body: JSON.stringify({ name: newName, domain: p.domain ?? undefined }),
+          body: JSON.stringify({ name: newName }),
         });
       }
       await load();
@@ -167,25 +172,19 @@ export function ProjectsPanel({
         <form className="card pj-form" onSubmit={submit}>
           <div className="pj-fields">
             <label>
-              <span>Nome da oferta</span>
+              <span>Nome da oferta / campanha</span>
               <input
                 className="input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Recarga TIM — criativo 3"
+                placeholder="Oferta Black Friday — LP Principal"
                 autoFocus
               />
             </label>
-            <label>
-              <span>Domínio (opcional)</span>
-              <input
-                className="input"
-                value={domain}
-                onChange={(e) => setDomain(e.target.value)}
-                placeholder="recarga-tim-rapido.vercel.app"
-              />
-            </label>
           </div>
+          <p className="pj-hint" style={{ marginTop: 6 }}>
+            Os domínios aparecem automaticamente quando a tag instalada começar a enviar dados.
+          </p>
           <button type="submit" className="btn btn-primary" disabled={busy || !name.trim()}>
             {busy ? "Criando…" : "Criar projeto"}
           </button>
@@ -230,7 +229,14 @@ export function ProjectsPanel({
           >
             <button className="pj-open" onClick={() => onOpen(p.siteId)}>
               <span className="pj-name">{p.name}</span>
-              <span className="pj-domain">{p.domain ?? p.siteId}</span>
+              <span className="pj-domains">
+                {(() => {
+                  const first = p.detectedDomains[0];
+                  if (!first) return <span className="pj-no-domain">Nenhum domínio detectado ainda</span>;
+                  if (p.detectedDomains.length === 1) return <span className="pj-domain">✓ {first.host}</span>;
+                  return <span className="pj-domain-multi">{p.detectedDomains.length} domínios detectados</span>;
+                })()}
+              </span>
             </button>
 
             <div className="pj-stats">
@@ -242,6 +248,23 @@ export function ProjectsPanel({
               </span>
               {p.discovered && <span className="pj-tag">não nomeado</span>}
             </div>
+
+            {p.detectedDomains.length > 1 && (
+              <details className="pj-domain-list">
+                <summary>Ver todos</summary>
+                <ul>
+                  {p.detectedDomains.map((d) => (
+                    <li key={d.host}>
+                      ✓ {d.host} <small>· {d.sessions7d} sessões</small>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+
+            {p.detectedDomains.length === 0 && (
+              <p className="pj-hint pj-empty-hint">Instale a tag para começar a receber dados.</p>
+            )}
 
             <div className="pj-actions">
               <button title="Instruções de instalação" onClick={() => onInstall(p.siteId)}>
