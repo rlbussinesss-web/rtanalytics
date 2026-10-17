@@ -25,6 +25,7 @@ import {
 import { discoverFunnel } from "./discovery.js";
 import { listHighlights } from "./highlights.js";
 import { computeAutopsy } from "./autopsy.js";
+import { computeKeywords } from "./keywords.js";
 import { computeFunnel, type FunnelStepInput } from "./funnel.js";
 import { listReplays, getReplayFrames, getSessionMarkers } from "./replays.js";
 import { computeHeatmap } from "./heatmap.js";
@@ -158,6 +159,13 @@ app.get("/api/sites/:siteId/audience", async (req) => {
   return computeAudience(siteId, range);
 });
 
+app.get("/api/sites/:siteId/keywords", async (req) => {
+  const { siteId } = req.params as { siteId: string };
+  const q = req.query as { range?: string };
+  const range: RangeKey = q.range === "7d" || q.range === "30d" ? q.range : "24h";
+  return computeKeywords(siteId, range);
+});
+
 app.post("/api/sites/:siteId/funnel", async (req, reply) => {
   const { siteId } = req.params as { siteId: string };
   const body = req.body as { range?: string; steps?: FunnelStepInput[] };
@@ -181,7 +189,7 @@ app.get("/api/sites/:siteId/heatmap", async (req) => {
 
 app.get("/api/sites/:siteId/replays", async (req) => {
   const { siteId } = req.params as { siteId: string };
-  const q = req.query as { favorites?: string; device?: string; tag?: string; conversion?: string };
+  const q = req.query as { favorites?: string; device?: string; tag?: string; conversion?: string; almostBought?: string };
   return {
     siteId,
     replays: await listReplays(siteId, {
@@ -189,6 +197,7 @@ app.get("/api/sites/:siteId/replays", async (req) => {
       device: q.device,
       tag: q.tag,
       conversion: q.conversion,
+      almostBought: q.almostBought === "true",
     }),
     tags: await listTags(siteId),
   };

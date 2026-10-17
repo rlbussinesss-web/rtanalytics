@@ -141,11 +141,38 @@ class RTATracker {
   }
 
   private trackPageview(): void {
-    this.transport.send({
-      ...this.baseEnvelope(),
-      eventType: "pageview",
+    const envelope = this.baseEnvelope();
+    const event = {
+      ...envelope,
+      eventType: "pageview" as const,
       payload: { title: document.title, ...collectAttributes() },
-    } as AnyTrackerEvent);
+    } as AnyTrackerEvent;
+
+    // Fast-path: fire an HTTP beacon BEFORE the WebSocket connects so the
+    // dashboard sees the visitor within milliseconds rather than waiting for
+    // DNS + TLS handshake (which can take 2-5s on DuckDNS). The WS still
+    // delivers the full event with all attributes moments later; the server
+    // deduplicates by eventId and the online counter is idempotent per session.
+    try {
+      const beaconUrl = this.config.wsUrl
+        .replace(/^wss:/, "https:")
+        .replace(/^ws:/, "http:")
+        .replace(/\/$/, "") + "/beacon";
+      const beaconPayload = JSON.stringify({
+        siteId: envelope.siteId,
+        sessionId: envelope.sessionId,
+        visitorId: envelope.visitorId,
+        eventId: envelope.eventId,
+        path: envelope.path,
+      });
+      if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+        navigator.sendBeacon(beaconUrl, new Blob([beaconPayload], { type: "application/json" }));
+      }
+    } catch {
+      /* beacon is best-effort; the WS path still delivers the real event */
+    }
+
+    this.transport.send(event);
   }
 
   /**

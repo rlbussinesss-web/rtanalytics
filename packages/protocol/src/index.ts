@@ -44,6 +44,7 @@ export const pageviewSchema = z.object({
     fbclid: z.string().max(200).optional(),
     ttclid: z.string().max(200).optional(),
     msclkid: z.string().max(200).optional(),
+    keyword: z.string().max(200).optional(),
   }),
 });
 
@@ -169,7 +170,15 @@ export const visibilitySchema = z.object({
   ...baseFields,
   eventType: z.literal("visibility"),
   payload: z.object({
-    state: z.enum(["hidden", "visible", "left"]),
+    state: z.enum(["hidden", "visible", "idle", "left"]),
+    /** Monotonic sequence number so stale out-of-order events can be discarded. */
+    seq: z.number().int().nonnegative().optional(),
+    /** Client timestamp (ms since epoch) for ordering when seq is absent. */
+    ts: z.number().int().nonnegative().optional(),
+    /** Raw document.visibilityState at emission time — observability/debug. */
+    visibilityState: z.enum(["visible", "hidden"]).optional(),
+    /** Whether the window had focus at emission time. Blur ≠ background. */
+    hasFocus: z.boolean().optional(),
   }),
 });
 

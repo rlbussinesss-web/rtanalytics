@@ -40,7 +40,7 @@ export interface TrackerEventEnvelope<TType extends EventType, TPayload> extends
 
 export type PageviewEvent = TrackerEventEnvelope<
   "pageview",
-  { title?: string; screenWidth?: number; screenHeight?: number }
+  { title?: string; screenWidth?: number; screenHeight?: number; orientation?: "portrait" | "landscape" }
 >;
 
 export type HeartbeatEvent = TrackerEventEnvelope<
@@ -67,7 +67,13 @@ export type ConversionEvent = TrackerEventEnvelope<
 
 export type VisibilityEvent = TrackerEventEnvelope<
   "visibility",
-  { state: "hidden" | "visible" | "left" }
+  {
+    state: "hidden" | "visible" | "idle" | "left";
+    seq?: number;
+    ts?: number;
+    visibilityState?: "visible" | "hidden";
+    hasFocus?: boolean;
+  }
 >;
 
 /** Where the viewport sat over time — position as a function of time. */

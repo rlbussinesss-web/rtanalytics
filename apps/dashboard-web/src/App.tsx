@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Activity, Clock, Users, Zap } from "lucide-react";
 import { useLiveEvents, type LiveEvent } from "./useLiveEvents";
 import { useOnlineCount } from "./useOnlineCount";
 import { useSessions } from "./useSessions";
@@ -11,15 +10,13 @@ import { AudiencePanel } from "./AudiencePanel";
 import { AutopsyPanel } from "./AutopsyPanel";
 import { ProjectsPanel } from "./ProjectsPanel";
 import { InstallPanel } from "./InstallPanel";
-import { FunnelPanel } from "./FunnelPanel";
-import { HeatmapView } from "./HeatmapView";
 import { ReplaysPanel } from "./ReplaysPanel";
+import { KeywordsPanel } from "./KeywordsPanel";
 import type { RangeKey } from "./useMetrics";
 import type { ViewKey } from "./components/Sidebar";
 import { CommandBar } from "./components/CommandBar";
+import { MobileNav } from "./components/MobileNav";
 import { AoVivo } from "./AoVivo";
-import { StatCard } from "./components/StatCard";
-import { VisitorCard } from "./components/VisitorCard";
 import { AlertToasts } from "./components/AlertsCenter";
 import { useAlerts } from "./useAlerts";
 import { clearToken, getToken, setToken, verifyToken } from "./token";
@@ -70,7 +67,7 @@ function LoginScreen({ onSuccess }: { onSuccess: () => void }) {
     <div className="login-page">
       <form onSubmit={submit} className="card login-card">
         <div className="login-brand">
-          <img src="/logo.svg" alt="Pathora" className="login-logo" />
+          <img src="/logo.png" alt="Pathora" className="login-logo" />
           <h1 className="login-title">Pathora</h1>
         </div>
         <p className="login-sub">Monitoramento de visitantes em tempo real</p>
@@ -107,6 +104,7 @@ function Dashboard({
   const [watching, setWatching] = useState<string | null>(null);
   const [view, setView] = useState<ViewKey>("live");
   const [range, setRange] = useState<RangeKey>("24h");
+  const [moreOpen, setMoreOpen] = useState(false);
   const alerts = useAlerts(events, onlineCount);
 
   const infoBySession = useMemo(() => {
@@ -117,13 +115,41 @@ function Dashboard({
     return map;
   }, [events]);
 
-  // Latest visibility state per session, so the visitor list can separate
-  // people interacting now from those who backgrounded the tab.
+  // Latest visibility state per session using monotonic sequence numbers to
+  // discard stale out-of-order events. The tracker sends seq on every
+  // visibility emission; higher seq always wins regardless of arrival order.
+  // Falls back to timestamp comparison when seq is absent (old tracker).
   const visibilityBySession = useMemo(() => {
-    const map = new Map<string, "visible" | "hidden" | "left">();
+    const map = new Map<string, { state: "visible" | "hidden" | "idle" | "left"; seq?: number; ts?: number }>();
     for (const event of events) {
-      if (event.eventType === "visibility" && !map.has(event.sessionId)) {
-        map.set(event.sessionId, (event.payload?.state as "visible" | "hidden" | "left") ?? "visible");
+      if (event.eventType !== "visibility") continue;
+      const payload = event.payload as { state?: string; seq?: number; ts?: number } | undefined;
+      const state = (payload?.state as "visible" | "hidden" | "idle" | "left") ?? "visible";
+      const existing = map.get(event.sessionId);
+      if (!existing) {
+        map.set(event.sessionId, { state, seq: payload?.seq, ts: payload?.ts });
+        continue;
+      }
+      // Monotonic sequence: higher seq wins. Equal seq → higher ts wins.
+      // No seq on either → fall back to event timestamp ordering.
+      const newSeq = payload?.seq;
+      const oldSeq = existing.seq;
+      if (newSeq !== undefined && oldSeq !== undefined) {
+        if (newSeq > oldSeq) {
+          map.set(event.sessionId, { state, seq: newSeq, ts: payload?.ts });
+        }
+      } else if (newSeq !== undefined) {
+        // New has seq, old doesn't → new is from updated tracker, trust it.
+        map.set(event.sessionId, { state, seq: newSeq, ts: payload?.ts });
+      } else if (oldSeq !== undefined) {
+        // Old has seq, new doesn't → old is newer tracker, keep it.
+      } else {
+        // Neither has seq → compare timestamps (client ts preferred, then event ts).
+        const newTs = payload?.ts ?? event.timestamp;
+        const oldTs = existing.ts ?? 0;
+        if (newTs >= oldTs) {
+          map.set(event.sessionId, { state, ts: payload?.ts });
+        }
       }
     }
     return map;
@@ -179,18 +205,6 @@ function Dashboard({
                 onWatch={setWatching}
               />
             )}
-            {view === "overview" && (
-              <OverviewView
-                siteId={siteId}
-                onlineCount={onlineCount}
-                sessions={sessions}
-                events={events}
-                infoBySession={infoBySession}
-                visibilityBySession={visibilityBySession}
-                firstSeen={firstSeenRef.current}
-                onWatch={setWatching}
-              />
-            )}
             {view === "metrics" && (
               <MetricsPanel siteId={siteId} range={range} onRangeChange={setRange} />
             )}
@@ -200,17 +214,8 @@ function Dashboard({
             {view === "autopsy" && (
               <AutopsyPanel siteId={siteId} range={range} onRangeChange={setRange} />
             )}
-            {view === "heatmaps" && (
-              <>
-                <RangeSegment range={range} onChange={setRange} />
-                <HeatmapView siteId={siteId} range={range} />
-              </>
-            )}
-            {view === "funnel" && (
-              <>
-                <RangeSegment range={range} onChange={setRange} />
-                <FunnelPanel siteId={siteId} range={range} />
-              </>
+            {view === "keywords" && (
+              <KeywordsPanel siteId={siteId} range={range} onRangeChange={setRange} />
             )}
             {view === "replays" && <ReplaysPanel siteId={siteId} />}
           </div>
@@ -222,6 +227,36 @@ function Dashboard({
       )}
 
       <AlertToasts fired={alerts.fired} onDismiss={alerts.dismiss} />
+
+      <MobileNav
+        active={view}
+        onNavigate={(v) => { setView(v); setMoreOpen(false); }}
+        onMore={() => setMoreOpen((o) => !o)}
+      />
+
+      {moreOpen && (
+        <div className="mn-more-backdrop" onClick={() => setMoreOpen(false)}>
+          <div className="mn-more-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="mn-more-title">Mais</div>
+            {([
+              ["audience", "Público"],
+              ["keywords", "Palavras-chave"],
+              ["autopsy", "Autópsia"],
+              ["funnel", "Funis"],
+              ["heatmaps", "Heatmaps"],
+              ["install", "Instalação"],
+            ] as [ViewKey, string][]).map(([k, label]) => (
+              <button
+                key={k}
+                className={`mn-more-item${view === k ? " is-active" : ""}`}
+                onClick={() => { setView(k); setMoreOpen(false); }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -239,129 +274,3 @@ export function RangeSegment({ range, onChange }: { range: RangeKey; onChange: (
   );
 }
 
-interface LiveProps {
-  onlineCount: number;
-  sessions: string[];
-  events: LiveEvent[];
-  infoBySession: Map<string, LiveEvent>;
-  visibilityBySession: Map<string, "visible" | "hidden" | "left">;
-  firstSeen: Map<string, number>;
-  onWatch: (id: string) => void;
-}
-
-function OverviewView({ siteId, ...p }: LiveProps & { siteId: string }) {
-  const eventsPerMin = useMemo(() => {
-    const cutoff = Date.now() - 60_000;
-    return p.events.filter((e) => e.timestamp >= cutoff).length;
-  }, [p.events]);
-
-  // Live sparkline of events over the last ~2 minutes, in 10s buckets.
-  const spark = useMemo(() => bucketize(p.events, 12, 10_000), [p.events]);
-
-  return (
-    <>
-      <div className="grid">
-        <StatCard icon={<Users size={16} />} name="Visitantes online" value={p.onlineCount} spark={spark} />
-        <StatCard icon={<Activity size={16} />} name="Sessões ativas" value={p.sessions.length} accent="#8b5cf6" />
-        <StatCard icon={<Zap size={16} />} name="Eventos / min" value={eventsPerMin} spark={spark} accent="#06b6d4" />
-        <StatCard icon={<Clock size={16} />} name="Site" value={siteId} accent="#10b981" />
-      </div>
-
-      <VisitorsSection {...p} />
-      <EventsSection events={p.events} />
-    </>
-  );
-}
-
-function VisitorsSection(p: LiveProps) {
-  // A visitor is "ao vivo" while their tab is focused (visible or no signal
-  // yet), and "em segundo plano" once they background it. When they return,
-  // the visibility flips back to visible and they move up automatically.
-  const live: string[] = [];
-  const away: string[] = [];
-  for (const s of p.sessions) {
-    const vis = p.visibilityBySession.get(s);
-    if (vis === "hidden" || vis === "left") away.push(s);
-    else live.push(s);
-  }
-
-  const renderCards = (ids: string[], state: "active" | "hidden") => (
-    <div className="visitor-grid">
-      {ids.map((sessionId) => (
-        <VisitorCard
-          key={sessionId}
-          sessionId={sessionId}
-          info={p.infoBySession.get(sessionId)}
-          firstSeen={p.firstSeen.get(sessionId) ?? Date.now()}
-          onWatch={() => p.onWatch(sessionId)}
-          state={state}
-        />
-      ))}
-    </div>
-  );
-
-  return (
-    <>
-      <section className="section">
-        <div className="section-head">
-          <h2 className="section-title">Ao vivo · mexendo agora</h2>
-          <span className="section-count">{live.length}</span>
-        </div>
-        {live.length === 0 ? (
-          <div className="card empty-rich">
-            <span className="ico"><Users size={20} /></span>
-            <b>Ninguém interagindo agora</b>
-            <p>Visitantes ativos na página aparecem aqui em tempo real.</p>
-          </div>
-        ) : (
-          renderCards(live, "active")
-        )}
-      </section>
-
-      {away.length > 0 && (
-        <section className="section">
-          <div className="section-head">
-            <h2 className="section-title">Em segundo plano · podem voltar</h2>
-            <span className="section-count">{away.length}</span>
-          </div>
-          {renderCards(away, "hidden")}
-        </section>
-      )}
-    </>
-  );
-}
-
-function EventsSection({ events }: { events: LiveEvent[] }) {
-  return (
-    <section className="section">
-      <div className="section-head">
-        <h2 className="section-title">Eventos ao vivo</h2>
-        <span className="section-count">{events.length}</span>
-      </div>
-      <ul className="list is-scrollable">
-        {events.length === 0 && <li className="empty">Aguardando eventos…</li>}
-        {events.filter((e) => e.eventType !== "visibility").map((event) => (
-          <li key={event.eventId} className="row event-row">
-            <span className={`tag${event.eventType === "pageview" ? " is-pageview" : event.eventType === "conversion" ? " is-conversion" : ""}`}>
-              {event.eventType}
-            </span>
-            <span className="path">{event.path}</span>
-            <span className="mono">{event.sessionId.slice(0, 8)}</span>
-            <span className="time">{new Date(event.timestamp).toLocaleTimeString()}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-/** Counts events into N trailing time buckets, for a live sparkline. */
-function bucketize(events: LiveEvent[], buckets: number, sizeMs: number): number[] {
-  const now = Date.now();
-  const out = new Array(buckets).fill(0);
-  for (const e of events) {
-    const idx = buckets - 1 - Math.floor((now - e.timestamp) / sizeMs);
-    if (idx >= 0 && idx < buckets) out[idx]++;
-  }
-  return out;
-}

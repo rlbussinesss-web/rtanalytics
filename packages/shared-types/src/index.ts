@@ -72,6 +72,8 @@ export interface PageviewPayload {
   fbclid?: string;
   ttclid?: string;
   msclkid?: string;
+  /** Google Ads Search: the keyword/search term that triggered the ad. */
+  keyword?: string;
 }
 
 export interface PageviewEvent extends BaseEvent {

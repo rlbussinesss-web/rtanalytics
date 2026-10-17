@@ -125,6 +125,54 @@ app.get("/healthz", async () => ({
   connections: connectionCount(),
 }));
 
+/**
+ * Fast-path HTTP beacon for the initial pageview. The tracker fires this via
+ * navigator.sendBeacon() BEFORE the WebSocket connects, so the dashboard sees
+ * a visitor within milliseconds rather than waiting for DNS + TLS handshake
+ * (which can take 2-5s on DuckDNS). The WS still delivers the full event with
+ * all attributes; this is just enough to flip the online counter instantly.
+ *
+ * Dedup: the WS pageview arrives moments later with the same eventId. The
+ * persist-worker deduplicates by eventId, and the live feed tolerates a
+ * duplicate (it's the same event, just delivered twice). The online counter
+ * uses a sorted set keyed by sessionId, so a double-touch is idempotent.
+ */
+app.post("/beacon", async (req, reply) => {
+  const b = (req.body ?? {}) as {
+    siteId?: string;
+    sessionId?: string;
+    visitorId?: string;
+    eventId?: string;
+    path?: string;
+  };
+  if (!b.siteId || !b.sessionId || !b.eventId) {
+    return reply.code(400).send({ error: "missing fields" });
+  }
+  if (!isSiteAllowed(b.siteId)) {
+    return reply.code(403).send({ error: "unknown_site" });
+  }
+  // Touch presence immediately so the online counter flips.
+  await touchPresence(b.siteId, b.sessionId).catch((err) =>
+    app.log.warn({ err }, "beacon touchPresence failed")
+  );
+  // Publish a minimal live event so the dashboard's activity feed updates.
+  const minimalEvent = {
+    schemaVersion: 1,
+    eventId: b.eventId,
+    siteId: b.siteId,
+    visitorId: b.visitorId ?? "",
+    sessionId: b.sessionId,
+    eventType: "pageview",
+    timestamp: Date.now(),
+    path: b.path ?? "/",
+    payload: {},
+  };
+  await publishLiveEvent(b.siteId, minimalEvent).catch((err) =>
+    app.log.warn({ err }, "beacon publishLiveEvent failed")
+  );
+  return { ok: true };
+});
+
 /** Debug-only: lists session ids whose WebSocket is currently held by this
  *  instance. Lets us distinguish "command sent but no socket" from "socket
  *  exists but tracker ignores the command". Never expose in public docs. */

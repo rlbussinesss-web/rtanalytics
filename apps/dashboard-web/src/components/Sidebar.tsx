@@ -4,24 +4,24 @@ import {
   ChevronsUpDown,
   Filter,
   Flame,
-  LayoutDashboard,
   LogOut,
   Moon,
   PlayCircle,
+  Search,
   Sun,
   Trophy,
 } from "lucide-react";
 import { avatarFor } from "../lib/ui";
 
-export type ViewKey = "projects" | "install" | "overview" | "live" | "metrics" | "audience" | "autopsy" | "funnel" | "heatmaps" | "replays";
+export type ViewKey = "projects" | "install" | "live" | "metrics" | "audience" | "keywords" | "autopsy" | "funnel" | "heatmaps" | "replays";
 
 const NAV: { group: string; items: { key: ViewKey; label: string; icon: React.ReactNode }[] }[] = [
   {
     group: "Análise",
     items: [
-      { key: "overview", label: "Visão geral", icon: <LayoutDashboard /> },
       { key: "metrics", label: "Métricas", icon: <BarChart3 /> },
       { key: "audience", label: "Público", icon: <Trophy /> },
+      { key: "keywords", label: "Palavras-chave", icon: <Search /> },
       { key: "heatmaps", label: "Mapas de calor", icon: <Flame /> },
       { key: "funnel", label: "Funil", icon: <Filter /> },
     ],
@@ -58,7 +58,7 @@ export function Sidebar({
   return (
     <aside className={`sidebar${open ? " is-open" : ""}`}>
       <div className="brand-row">
-        <img src="/logo.svg" alt="Pathora" className="brand-logo" />
+        <img src="/logo.png" alt="Pathora" className="brand-logo" />
         <span className="brand-name">
           Pathora<small>real-time</small>
         </span>

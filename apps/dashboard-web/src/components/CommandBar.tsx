@@ -2,13 +2,11 @@ import { useState } from "react";
 import {
   Activity,
   BarChart3,
-  Filter,
-  Flame,
-  LayoutDashboard,
   LogOut,
   Menu,
   Moon,
   PlayCircle,
+  Search,
   Sun,
   Trophy,
   Stethoscope,
@@ -27,12 +25,10 @@ const LENSES: { key: ViewKey; label: string; icon: React.ReactNode }[] = [
   { key: "projects", label: "Projetos", icon: <LayoutGrid /> },
   { key: "live", label: "Ao Vivo", icon: <Activity /> },
   { key: "audience", label: "Público", icon: <Trophy /> },
+  { key: "keywords", label: "Palavras-chave", icon: <Search /> },
   { key: "autopsy", label: "Autópsia", icon: <Stethoscope /> },
-  { key: "funnel", label: "Jornada", icon: <Filter /> },
   { key: "metrics", label: "Métricas", icon: <BarChart3 /> },
-  { key: "heatmaps", label: "Mapas", icon: <Flame /> },
   { key: "replays", label: "Gravações", icon: <PlayCircle /> },
-  { key: "overview", label: "Visão geral", icon: <LayoutDashboard /> },
   { key: "install", label: "Instalação", icon: <Code2 /> },
 ];
 
@@ -64,7 +60,7 @@ export function CommandBar({
   return (
     <header className="cmdbar">
       <div className="cmd-brand">
-        <img src="/logo.svg" alt="Pathora" className="cmd-logo" />
+        <img src="/logo.png" alt="Pathora" className="cmd-logo" />
         Pathora
       </div>
 
@@ -114,11 +110,6 @@ export function CommandBar({
       </nav>
 
       <div className="cmd-spacer" />
-
-      <span className={`cmd-live${connected ? "" : " off"}`}>
-        {connected && <span className="live-dot" />}
-        {connected ? `${onlineCount} agora` : "reconectando…"}
-      </span>
 
       <button className="cmd-icon" onClick={onToggleTheme} aria-label="Alternar tema">
         {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}

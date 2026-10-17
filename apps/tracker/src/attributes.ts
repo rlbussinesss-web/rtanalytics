@@ -10,6 +10,10 @@
 
 const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const;
 const CLICK_ID_KEYS = ["gclid", "fbclid", "ttclid", "msclkid"] as const;
+// Google Ads Search passes the triggering keyword in a `keyword` param
+// (URL-encoded, e.g. keyword=tapete%20para%20carro). Capturing it lets the
+// dashboard rank which search terms drive visitors to checkout.
+const AD_PARAM_KEYS = ["keyword"] as const;
 
 export function collectAttributes(): Record<string, unknown> {
   const attrs: Record<string, unknown> = {};
@@ -20,6 +24,14 @@ export function collectAttributes(): Record<string, unknown> {
   attrs.vw = window.innerWidth;
   attrs.vh = window.innerHeight;
   attrs.dpr = Math.round((window.devicePixelRatio || 1) * 100) / 100;
+
+  // Orientation — portrait vs landscape, useful for mobile replay scaling.
+  try {
+    const orient = screen.orientation?.type;
+    if (orient) attrs.orientation = orient.startsWith("portrait") ? "portrait" : "landscape";
+  } catch {
+    /* older browsers lack screen.orientation */
+  }
 
   // Locale + timezone — region/language of the visitor.
   attrs.lang = navigator.language;
@@ -50,6 +62,11 @@ export function collectAttributes(): Record<string, unknown> {
   for (const k of CLICK_ID_KEYS) {
     const v = params.get(k);
     if (v) attrs[k] = v.slice(0, 200);
+  }
+  // Google Ads Search keyword — the search term that triggered the ad.
+  for (const k of AD_PARAM_KEYS) {
+    const v = params.get(k);
+    if (v) attrs[k] = decodeURIComponent(v).slice(0, 200);
   }
 
   return attrs;
