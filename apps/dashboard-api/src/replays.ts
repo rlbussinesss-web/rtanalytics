@@ -36,6 +36,10 @@ export interface ReplayFilter {
   tag?: string;
   /** Only sessions that fired this conversion goal. */
   conversion?: string;
+  /** Only sessions that visited a checkout/payment page but did NOT convert —
+   *  the "almost bought" audience. Detects checkout paths by common URL
+   *  patterns and excludes any session with a conversion event. */
+  almostBought?: boolean;
 }
 
 export async function listReplays(siteId: string, filter: ReplayFilter = {}): Promise<ReplaySummary[]> {
@@ -53,6 +57,21 @@ export async function listReplays(siteId: string, filter: ReplayFilter = {}): Pr
   if (filter.conversion) {
     params.push(filter.conversion);
     conds.push(`$${params.length} = ANY(ev.conversions)`);
+  }
+  if (filter.almostBought) {
+    // Sessions that visited a checkout/payment page but did NOT convert.
+    // Detects common checkout URL patterns and excludes any session with
+    // a conversion event — the "almost bought" audience for remarketing.
+    conds.push(`(
+      EXISTS (
+        SELECT 1 FROM events p
+         WHERE p.site_id = $1 AND p.session_id = r.session_id
+           AND p.event_type = 'pageview'
+           AND (p.path ~* '/(checkout|pagamento|payment|finalizar|carrinho|cart|order)'
+                OR p.path ~* '\\?.*step=')
+      )
+      AND (ev.conversions IS NULL OR array_length(ev.conversions, 1) IS NULL)
+    )`);
   }
 
   const rows = await query<{

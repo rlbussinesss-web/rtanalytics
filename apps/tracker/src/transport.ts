@@ -38,6 +38,7 @@ export class Transport {
 
   connect(): void {
     this.closedByUser = false;
+    this.installNetworkListeners();
     this.openSocket();
   }
 
@@ -145,8 +146,39 @@ export class Transport {
     this.attempts.delete(eventId);
   }
 
+  /**
+   * Listen for browser online/offline events so reconnection is immediate
+   * when a mobile user switches networks or regains signal, rather than
+   * waiting for the backoff timer (which can be up to 30s).
+   */
+  private onlineHandler: (() => void) | null = null;
+
+  private installNetworkListeners(): void {
+    if (typeof window === "undefined") return;
+    this.onlineHandler = () => {
+      // Only reconnect if we're not already connected and didn't close intentionally.
+      if (!this.isOpen && !this.closedByUser) {
+        if (this.reconnectTimer) {
+          clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
+        this.attempt = 0;
+        this.openSocket();
+      }
+    };
+    window.addEventListener("online", this.onlineHandler);
+  }
+
+  private removeNetworkListeners(): void {
+    if (this.onlineHandler && typeof window !== "undefined") {
+      window.removeEventListener("online", this.onlineHandler);
+      this.onlineHandler = null;
+    }
+  }
+
   close(): void {
     this.closedByUser = true;
+    this.removeNetworkListeners();
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.ws?.close();
   }

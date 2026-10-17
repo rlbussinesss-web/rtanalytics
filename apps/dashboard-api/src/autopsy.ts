@@ -2,20 +2,17 @@ import { query } from "./db.js";
 import type { RangeKey } from "./metrics.js";
 
 /**
- * Abandonment autopsy: what was on screen when each visitor gave up.
+ * Simplified checkout abandonment report.
  *
- * Every other analysis in this product ends at "they left on /recarga". That
- * names a page, not a reason, and a page cannot be fixed. This finds the last
- * position each lost session held, translates it into the content that sat
- * there, and groups thousands of those moments — so the output is not a page
- * but an objection: "1.243 pessoas pararam olhando o campo de CPF".
+ * For paid-traffic operators the only question that matters is: how many
+ * people reached checkout, how many bought, and at which step did the rest
+ * get stuck? The old block-level "objection" analysis was technically
+ * interesting but operationally useless — you can't fix a CSS block, you
+ * fix a funnel step.
  *
- * Two deliberate limits keep it from inventing certainty:
- *  - only sessions with a viewport trail can be examined; a session that never
- *    reported a position is excluded rather than guessed at, and the response
- *    says how many were skipped;
- *  - a page with no content map yields nothing, because without knowing what
- *    lives at each height the position means nothing.
+ * Steps are detected by common checkout URL patterns. Each step counts
+ * sessions that visited it; "dropped here" = visited this step but never
+ * reached the next one (and never converted).
  */
 
 const RANGE_INTERVAL: Record<RangeKey, string> = {
@@ -24,185 +21,76 @@ const RANGE_INTERVAL: Record<RangeKey, string> = {
   "30d": "30 days",
 };
 
-/** Below this, a cluster is an anecdote rather than a pattern. */
-const MIN_CLUSTER = 3;
-/**
- * A session this recent has not abandoned — it is still happening. Counting it
- * as a death would turn every current visitor into evidence against the page.
- */
-const SETTLE_MINUTES = 30;
-/** Enough to name the gap without rendering an unbounded list. */
-const MAX_MISSING_MAPS = 10;
+/** Ordered funnel steps: regex pattern → human label. A session is "in" a
+ * step if any of its pageview paths match the pattern. Steps are checked in
+ * order; a session's deepest matched step is where it got to. */
+const FUNNEL_STEPS: { pattern: RegExp; step: string; label: string }[] = [
+  { pattern: /\/(carrinho|cart|basket)/i, step: "cart", label: "Carrinho" },
+  { pattern: /\/(checkout|informacoes|informations?|dados|contato|contact|shipping|frete|entrega)/i, step: "info", label: "Informações / Frete" },
+  { pattern: /\/(pagamento|payment|pay|pix|boleto|card|credit)/i, step: "payment", label: "Pagamento" },
+  { pattern: /\/(obrigado|thank|success|confirmacao|confirmation|pedido-realizado)/i, step: "thanks", label: "Confirmação" },
+];
 
-/** Content is per page, so campaign parameters must not fragment the lookup. */
-function pagePath(path: string): string {
-  const q = path.indexOf("?");
-  return q === -1 ? path : path.slice(0, q);
-}
-
-interface PageBlock {
-  y: number;
-  h: number;
-  tag: string;
-  id?: string;
-  text?: string;
-  input?: boolean;
-}
-
-export interface Objection {
-  id: string;
-  /** Human-readable description of what they were looking at. */
+export interface FunnelStep {
+  step: string;
   label: string;
-  /** The element kind, so the UI can show the right affordance. */
-  kind: "campo" | "botão" | "texto" | "imagem" | "preço";
-  path: string;
-  /** Sessions that died looking at this. */
+  /** Sessions that visited this step. */
   sessions: number;
-  /** Share of all examined abandonments. */
-  share: number;
-  /** Conversions this likely cost, at the site's own conversion rate. */
-  estimatedLostConversions: number;
-  /** Only present when conversions carry a value. */
-  estimatedLostRevenue: number | null;
-  /** Vertical position of the block, for the UI to point at it. */
-  y: number;
-  h: number;
-  /** A few sessions to watch, as evidence. */
+  /** Sessions whose deepest step was this one (and who didn't convert). */
+  droppedHere: number;
+  /** droppedHere / sessions for this step. */
+  dropRate: number;
+  /** A few session ids to watch as evidence. */
   sampleSessions: string[];
 }
 
-export interface AutopsyReport {
+export interface CheckoutReport {
   range: RangeKey;
-  /** Abandoned sessions that could be examined. */
-  examined: number;
-  /** Abandoned sessions with no position trail — excluded, not guessed. */
-  skippedNoTrail: number;
-  /** True once there is enough material for the grouping to mean anything. */
+  totalSessions: number;
+  reachedCheckout: number;
+  converted: number;
+  abandoned: number;
+  abandonmentRate: number;
+  steps: FunnelStep[];
   enoughData: boolean;
-  objections: Objection[];
-  /** Paths that have deaths but no content map yet. */
-  missingMaps: string[];
 }
 
-interface DeathRow {
+interface SessionPath {
   session_id: string;
   path: string;
-  y: string | null;
-  h: string | null;
 }
 
-interface MapRow {
-  path: string;
-  blocks: PageBlock[];
+interface ConversionRow {
+  session_id: string;
 }
 
-/** Classifies a block into something a person would recognise. */
-function kindOf(b: PageBlock): Objection["kind"] {
-  if (b.input) return "campo";
-  if (b.tag === "button" || b.tag === "a") return "botão";
-  if (b.tag === "img") return "imagem";
-  if (b.text && /R\$|\d+,\d{2}|preço|valor|frete/i.test(b.text)) return "preço";
-  return "texto";
-}
-
-/**
- * The block a visitor was most likely looking at.
- *
- * Not simply "the topmost visible block": people read toward the middle of the
- * screen, and the block they stopped on is the one occupying that attention.
- * Interactive elements win ties because stopping on a field you must fill is a
- * stronger signal than stopping on the paragraph beside it.
- */
-function anchorBlock(blocks: PageBlock[], y: number, h: number): PageBlock | null {
-  const top = y;
-  const bottom = y + h;
-  const centre = y + h / 2;
-
-  const visible = blocks.filter((b) => b.y + b.h > top && b.y < bottom && (b.text || b.input));
-  if (visible.length === 0) return null;
-
-  let best: PageBlock | null = null;
-  let bestScore = -Infinity;
-  for (const b of visible) {
-    const blockCentre = b.y + b.h / 2;
-    const distance = Math.abs(blockCentre - centre);
-    // Closer to the centre of attention is better; interactive elements and
-    // headings carry more meaning than body copy at the same distance.
-    const weight = b.input ? 220 : b.tag === "button" ? 180 : /^h[1-3]$/.test(b.tag) ? 90 : 0;
-    const score = weight - distance;
-    if (score > bestScore) {
-      bestScore = score;
-      best = b;
-    }
-  }
-  return best;
-}
-
-export async function computeAutopsy(siteId: string, range: RangeKey): Promise<AutopsyReport> {
+export async function computeAutopsy(siteId: string, range: RangeKey): Promise<CheckoutReport> {
   const interval = RANGE_INTERVAL[range];
 
-  const settled = `AND NOT EXISTS (
-      SELECT 1 FROM events r
-       WHERE r.site_id = $1 AND r.session_id = v.session_id
-         AND r.time > now() - interval '${SETTLE_MINUTES} minutes'
-    )`;
-
-  const [deaths, coverage, maps, rateRow] = await Promise.all([
-    // The last position each abandoning session held. DISTINCT ON gives the
-    // most recent viewport event per session; the last sample inside it is the
-    // final place the visitor was before leaving.
-    query<DeathRow>(
-      `SELECT DISTINCT ON (v.session_id)
-              v.session_id,
-              v.path,
-              (v.payload->'samples'->-1->>'y') AS y,
-              (v.payload->'samples'->-1->>'h') AS h
-         FROM events v
-        WHERE v.site_id = $1
-          AND v.is_bot IS NOT TRUE
-          AND v.event_type = 'viewport'
-          AND v.time >= now() - interval '${interval}'
-          AND NOT EXISTS (
-            SELECT 1 FROM events c
-             WHERE c.site_id = v.site_id
-               AND c.session_id = v.session_id
-               AND c.event_type = 'conversion'
-          )
-          ${settled}
-        ORDER BY v.session_id, v.time DESC`,
-      [siteId]
-    ),
-    // Real coverage: how many abandoned sessions could be examined at all.
-    // Counting only the rows the query above returned would always look like
-    // full coverage, because that query already selects sessions with a trail.
-    query<{ abandoned: string; with_trail: string }>(
-      `SELECT count(DISTINCT v.session_id)::int AS abandoned,
-              count(DISTINCT v.session_id) FILTER (WHERE v.event_type = 'viewport')::int AS with_trail
-         FROM events v
-        WHERE v.site_id = $1
-          AND v.is_bot IS NOT TRUE
-          AND v.time >= now() - interval '${interval}'
-          AND NOT EXISTS (
-            SELECT 1 FROM events c
-             WHERE c.site_id = v.site_id
-               AND c.session_id = v.session_id
-               AND c.event_type = 'conversion'
-          )
-          ${settled}`,
-      [siteId]
-    ),
-    // The most recently seen map for each path.
-    query<MapRow>(
-      `SELECT DISTINCT ON (path) path, blocks
-         FROM page_maps
+  const [allPaths, conversions, totals] = await Promise.all([
+    // Every pageview path per session in the window.
+    query<SessionPath>(
+      `SELECT DISTINCT session_id, path
+         FROM events
         WHERE site_id = $1
-        ORDER BY path, last_seen DESC`,
+          AND is_bot IS NOT TRUE
+          AND event_type = 'pageview'
+          AND time >= now() - interval '${interval}'`,
       [siteId]
     ),
-    query<{ sessions: string; conversions: string; revenue: string | null }>(
+    // Sessions that converted.
+    query<ConversionRow>(
+      `SELECT DISTINCT session_id
+         FROM events
+        WHERE site_id = $1
+          AND event_type = 'conversion'
+          AND time >= now() - interval '${interval}'`,
+      [siteId]
+    ),
+    // Totals for context.
+    query<{ sessions: string; conversions: string }>(
       `SELECT count(DISTINCT session_id)::int AS sessions,
-              count(DISTINCT session_id) FILTER (WHERE event_type = 'conversion')::int AS conversions,
-              sum((payload->>'value')::float) FILTER (WHERE event_type = 'conversion') AS revenue
+              count(DISTINCT session_id) FILTER (WHERE event_type = 'conversion')::int AS conversions
          FROM events
         WHERE site_id = $1 AND is_bot IS NOT TRUE
           AND time >= now() - interval '${interval}'`,
@@ -210,75 +98,77 @@ export async function computeAutopsy(siteId: string, range: RangeKey): Promise<A
     ),
   ]);
 
-  const mapByPath = new Map(maps.map((m) => [pagePath(m.path), m.blocks]));
-  const totals = rateRow[0];
-  const sessions = Number(totals?.sessions ?? 0);
-  const conversions = Number(totals?.conversions ?? 0);
-  const revenue = totals?.revenue == null ? null : Number(totals.revenue);
-  const conversionRate = sessions > 0 ? conversions / sessions : 0;
-  const valuePerConversion = revenue != null && conversions > 0 ? revenue / conversions : null;
+  const convertedSet = new Set(conversions.map((c) => c.session_id));
+  const totalSessions = Number(totals[0]?.sessions ?? 0);
+  const converted = Number(totals[0]?.conversions ?? 0);
 
-  const clusters = new Map<
-    string,
-    { block: PageBlock; path: string; sessions: string[] }
-  >();
-  let examined = 0;
-  const missing = new Set<string>();
-
-  for (const d of deaths) {
-    if (d.y == null || d.h == null) continue;
-    const page = pagePath(d.path);
-    const blocks = mapByPath.get(page);
-    if (!blocks) {
-      missing.add(page);
-      continue;
-    }
-    const block = anchorBlock(blocks, Number(d.y), Number(d.h));
-    if (!block) continue;
-
-    examined += 1;
-    // Identity is content-based, so the same block keeps its cluster even if the
-    // page shifts it a few pixels between versions.
-    const key = `${page}|${block.tag}|${block.id ?? ""}|${(block.text ?? "").slice(0, 60)}`;
-    const entry = clusters.get(key) ?? { block, path: page, sessions: [] };
-    entry.sessions.push(d.session_id);
-    clusters.set(key, entry);
+  // Group paths by session.
+  const pathsBySession = new Map<string, string[]>();
+  for (const row of allPaths) {
+    const list = pathsBySession.get(row.session_id) ?? [];
+    list.push(row.path);
+    pathsBySession.set(row.session_id, list);
   }
 
-  const objections: Objection[] = [...clusters.entries()]
-    .filter(([, c]) => c.sessions.length >= MIN_CLUSTER)
-    .map(([key, c]) => {
-      const n = c.sessions.length;
-      const lostConversions = n * conversionRate;
-      return {
-        id: key,
-        label: c.block.text?.trim() || `${c.block.tag}${c.block.id ? `#${c.block.id}` : ""}`,
-        kind: kindOf(c.block),
-        path: c.path,
-        sessions: n,
-        share: examined > 0 ? n / examined : 0,
-        estimatedLostConversions: Math.round(lostConversions * 10) / 10,
-        estimatedLostRevenue:
-          valuePerConversion != null ? Math.round(lostConversions * valuePerConversion) : null,
-        y: c.block.y,
-        h: c.block.h,
-        sampleSessions: c.sessions.slice(0, 5),
-      };
-    })
-    .sort((a, b) => b.sessions - a.sessions);
+  // For each session, find the deepest funnel step it reached.
+  // Step depth = index in FUNNEL_STEPS (higher = deeper).
+  const sessionDeepest = new Map<string, number>(); // session_id → deepest step index
+  const sessionsInStep = new Map<string, Set<string>>(); // step → set of session_ids that visited it
+  const checkoutSessions = new Set<string>();
 
-  const abandoned = Number(coverage[0]?.abandoned ?? 0);
-  const withTrail = Number(coverage[0]?.with_trail ?? 0);
+  for (const [sessionId, paths] of pathsBySession) {
+    let deepest = -1;
+    for (const p of paths) {
+      for (let i = 0; i < FUNNEL_STEPS.length; i++) {
+        const step = FUNNEL_STEPS[i]!;
+        if (step.pattern.test(p)) {
+          if (i > deepest) deepest = i;
+          // Track that this session visited this step.
+          const stepKey = step.step;
+          if (!sessionsInStep.has(stepKey)) sessionsInStep.set(stepKey, new Set());
+          sessionsInStep.get(stepKey)!.add(sessionId);
+          // Any checkout-step visit counts as "reached checkout".
+          if (i >= 0) checkoutSessions.add(sessionId);
+        }
+      }
+    }
+    if (deepest >= 0) sessionDeepest.set(sessionId, deepest);
+  }
+
+  const reachedCheckout = checkoutSessions.size;
+
+  // Build per-step stats. "Dropped here" = sessions whose deepest step was
+  // this one AND who did not convert.
+  const steps: FunnelStep[] = FUNNEL_STEPS.map((def, idx) => {
+    const visitors = sessionsInStep.get(def.step)?.size ?? 0;
+    const droppedIds: string[] = [];
+    for (const [sid, deepest] of sessionDeepest) {
+      if (deepest === idx && !convertedSet.has(sid)) {
+        droppedIds.push(sid);
+      }
+    }
+    return {
+      step: def.step,
+      label: def.label,
+      sessions: visitors,
+      droppedHere: droppedIds.length,
+      dropRate: visitors > 0 ? droppedIds.length / visitors : 0,
+      sampleSessions: droppedIds.slice(0, 5),
+    };
+  });
+
+  // Abandoned = reached checkout but didn't convert.
+  const abandoned = [...checkoutSessions].filter((s) => !convertedSet.has(s)).length;
+  const abandonmentRate = reachedCheckout > 0 ? abandoned / reachedCheckout : 0;
 
   return {
     range,
-    examined,
-    // Sessions that abandoned without ever reporting a position: excluded from
-    // the analysis rather than guessed at, and reported so the coverage of the
-    // conclusions is visible instead of implied.
-    skippedNoTrail: Math.max(0, abandoned - withTrail),
-    enoughData: objections.length > 0,
-    objections,
-    missingMaps: [...missing].slice(0, MAX_MISSING_MAPS),
+    totalSessions,
+    reachedCheckout,
+    converted,
+    abandoned,
+    abandonmentRate,
+    steps: steps.filter((s) => s.sessions > 0),
+    enoughData: reachedCheckout > 0,
   };
 }

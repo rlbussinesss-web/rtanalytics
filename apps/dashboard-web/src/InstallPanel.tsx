@@ -244,7 +244,7 @@ function DiagnosticPanel({
 }) {
   const checks = [
     { label: "Projeto criado", ok: Boolean(project), hint: "O projeto existe no Pathora." },
-    { label: "Domínio configurado", ok: Boolean(project?.domain), hint: project?.domain ? project.domain : "Configure o domínio na aba Projetos." },
+    { label: "Domínio configurado", ok: Boolean(project?.domain) || installed, hint: installed ? "Tracker funcionando — domínio opcional." : (project?.domain ? project.domain : "Configure o domínio na aba Projetos.") },
     { label: "API Pathora", ok: true, hint: "Conexão com a API funcionando." },
     { label: "Tracker detectado", ok: installed, hint: installed ? `Último evento: ${formatTime(project?.lastSeen)}` : "Nenhum evento recebido ainda." },
   ];
@@ -374,15 +374,33 @@ export function InstallPanel({ siteId }: { siteId: string }) {
         </li>
 
         <li>
-          <h3>Diga o que conta como venda</h3>
-          <p>Informe o endereço da página que só aparece quando a pessoa converte — a tela de pagamento, de Pix gerado ou de obrigado.</p>
-          <div className="inst-conv">
-            <input className="input" value={conversionPath} onChange={(e) => setConversionPath(e.target.value)} placeholder="/pagamento" />
-            <button className="btn btn-ghost btn-sm" onClick={savePath} disabled={conversionPath === savedPath}>
-              {conversionPath === savedPath ? "Salvo" : "Salvar"}
-            </button>
-          </div>
-          <p className="inst-note">Digite só o final do endereço. Se a página é <code>seusite.com/pagamento</code>, escreva <code>/pagamento</code>.</p>
+          <h3>Diga o que conta como venda (Pix)</h3>
+          <p>Para pagamentos via Pix, existem duas formas de rastrear. Escolha a que se encaixa no seu fluxo:</p>
+
+          <details className="inst-advanced" open>
+            <summary><strong>Opção A: Página de "Pix Gerado" ou "Obrigado" (mais simples)</strong></summary>
+            <p style={{ marginTop: 8 }}>Se o seu site redireciona para uma página exclusiva após o cliente gerar o Pix, informe o caminho abaixo. O Pathora conta como conversão assim que essa página carrega.</p>
+            <div className="inst-conv">
+              <input className="input" value={conversionPath} onChange={(e) => setConversionPath(e.target.value)} placeholder="/pix/gerado" />
+              <button className="btn btn-ghost btn-sm" onClick={savePath} disabled={conversionPath === savedPath}>
+                {conversionPath === savedPath ? "Salvo" : "Salvar"}
+              </button>
+            </div>
+            <p className="inst-note">⚠️ Isso conta <em>intent</em> (Pix gerado), não confirmação de pagamento. Use apenas se não tiver integração backend.</p>
+          </details>
+
+          <details className="inst-advanced">
+            <summary><strong>Opção B: Confirmação real via webhook (recomendado para Pix)</strong></summary>
+            <p style={{ marginTop: 8 }}>Para saber quando o Pix foi <strong>realmente pago</strong>, chame o tracker no seu backend após receber o webhook do gateway (MercadoPago, Stripe, Gerencianet, etc.):</p>
+            <pre className="inst-code-block">{`// No frontend, após seu backend confirmar o pagamento:
+if (window.rta) {
+  window.rta.track('pix_pago', {
+    orderId: 'pedido-123',
+    value: 97.00
+  });
+}`}</pre>
+            <p className="inst-note">✅ Esta é a única forma confiável de medir receita real. O campo acima (Opção A) pode ser deixado vazio se você usar esta opção.</p>
+          </details>
         </li>
 
         <li>

@@ -26,7 +26,7 @@ interface Props {
   sessions: string[];
   events: LiveEvent[];
   infoBySession: Map<string, LiveEvent>;
-  visibilityBySession: Map<string, "visible" | "hidden" | "left">;
+  visibilityBySession: Map<string, { state: "visible" | "hidden" | "idle" | "left"; seq?: number; ts?: number }>;
   firstSeen: Map<string, number>;
   onWatch: (id: string) => void;
 }
@@ -49,7 +49,7 @@ export function AoVivo(p: Props) {
   const spark = useMemo(() => bucketize(p.events, 26, 8_000), [p.events]);
 
   const liveCount = useMemo(
-    () => p.sessions.filter((s) => { const v = p.visibilityBySession.get(s); return v !== "hidden" && v !== "left"; }).length,
+    () => p.sessions.filter((s) => { const v = p.visibilityBySession.get(s); return v?.state !== "hidden" && v?.state !== "left"; }).length,
     [p.sessions, p.visibilityBySession]
   );
 

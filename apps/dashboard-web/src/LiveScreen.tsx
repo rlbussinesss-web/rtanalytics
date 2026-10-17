@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Replayer } from "rrweb";
-import { EyeOff, LogOut, WifiOff, X } from "lucide-react";
+import { Clock, EyeOff, LogOut, WifiOff, X } from "lucide-react";
 // Without rrweb's stylesheet the replayer's iframe has no dimensions and the
 // stage renders blank even though frames are arriving.
 import "rrweb/dist/style.css";
@@ -189,11 +189,34 @@ export function LiveScreen({
     void tick; // re-evaluate staleness on each tick
     const mine = events.filter((e) => e.sessionId === sessionId);
     const lastSeen = mine[0]?.timestamp ?? 0;
-    const lastVis = mine.find((e) => e.eventType === "visibility");
-    const state = (lastVis?.payload?.state as string) ?? "visible";
+    // Find the latest visibility event using monotonic sequence numbers to
+    // discard stale out-of-order events. Higher seq always wins.
+    let bestVis: { state: string; seq?: number; ts?: number } | null = null;
+    for (const e of mine) {
+      if (e.eventType !== "visibility") continue;
+      const p = e.payload as { state?: string; seq?: number; ts?: number } | undefined;
+      const state = p?.state ?? "visible";
+      const seq = p?.seq;
+      const ts = p?.ts ?? e.timestamp;
+      if (!bestVis) {
+        bestVis = { state, seq, ts };
+        continue;
+      }
+      if (seq !== undefined && bestVis.seq !== undefined) {
+        if (seq > bestVis.seq) bestVis = { state, seq, ts };
+      } else if (seq !== undefined) {
+        bestVis = { state, seq, ts };
+      } else if (bestVis.seq !== undefined) {
+        // keep existing
+      } else {
+        if ((ts ?? 0) >= (bestVis.ts ?? 0)) bestVis = { state, ts };
+      }
+    }
+    const state = bestVis?.state ?? "visible";
     if (state === "left") return { kind: "left" as const };
     if (lastSeen && Date.now() - lastSeen > 40_000) return { kind: "gone" as const };
     if (state === "hidden") return { kind: "hidden" as const };
+    if (state === "idle") return { kind: "idle" as const };
     return { kind: "active" as const };
   }, [events, sessionId, tick]);
 
@@ -229,10 +252,11 @@ export function LiveScreen({
   );
 }
 
-type PresenceKind = "active" | "hidden" | "left" | "gone";
+type PresenceKind = "active" | "hidden" | "idle" | "left" | "gone";
 
 const PRESENCE: Record<Exclude<PresenceKind, "active">, { label: string; icon: React.ReactNode; tone: string }> = {
   hidden: { label: "Aba em segundo plano", icon: <EyeOff size={14} />, tone: "warn" },
+  idle: { label: "Inativo na aba aberta", icon: <Clock size={14} />, tone: "warn" },
   gone: { label: "Sem sinal — provavelmente saiu", icon: <WifiOff size={14} />, tone: "warn" },
   left: { label: "Visitante saiu do site", icon: <LogOut size={14} />, tone: "bad" },
 };

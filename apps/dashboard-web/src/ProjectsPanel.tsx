@@ -230,12 +230,13 @@ export function ProjectsPanel({
             <button className="pj-open" onClick={() => onOpen(p.siteId)}>
               <span className="pj-name">{p.name}</span>
               <span className="pj-domains">
-                {(() => {
-                  const first = p.detectedDomains[0];
-                  if (!first) return <span className="pj-no-domain">Nenhum domínio detectado ainda</span>;
-                  if (p.detectedDomains.length === 1) return <span className="pj-domain">✓ {first.host}</span>;
-                  return <span className="pj-domain-multi">{p.detectedDomains.length} domínios detectados</span>;
-                })()}
+                {p.detectedDomains.length === 0 ? (
+                  <span className="pj-no-domain">Nenhum domínio detectado ainda</span>
+                ) : p.detectedDomains.length === 1 ? (
+                  <span className="pj-domain">✓ {p.detectedDomains[0]!.host}</span>
+                ) : (
+                  <span className="pj-domain-multi">{p.detectedDomains.length} domínios detectados</span>
+                )}
               </span>
             </button>
 

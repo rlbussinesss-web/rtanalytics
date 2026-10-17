@@ -25,7 +25,7 @@ interface ReplaySummary {
   conversions: string[];
 }
 
-type ReplayTab = "all" | "pix" | "fav";
+type ReplayTab = "all" | "pix" | "fav" | "almost";
 
 export function ReplaysPanel({ siteId }: { siteId: string }) {
   const [replays, setReplays] = useState<ReplaySummary[]>([]);
@@ -37,7 +37,7 @@ export function ReplaysPanel({ siteId }: { siteId: string }) {
     setLoading(true);
     try {
       const query =
-        tab === "fav" ? "?favorites=true" : tab === "pix" ? "?conversion=pix_gerado" : "";
+        tab === "fav" ? "?favorites=true" : tab === "pix" ? "?conversion=pix_gerado" : tab === "almost" ? "?almostBought=true" : "";
       const res = await fetch(`${API_BASE_URL}/api/sites/${siteId}/replays${query}`, {
         headers: { Authorization: `Bearer ${getToken() ?? ""}` },
       });
@@ -73,6 +73,9 @@ export function ReplaysPanel({ siteId }: { siteId: string }) {
         </button>
         <button className={tab === "fav" ? "is-active" : ""} onClick={() => setTab("fav")}>
           <Star size={13} /> Favoritas
+        </button>
+        <button className={tab === "almost" ? "is-active" : ""} onClick={() => setTab("almost")}>
+          <Flame size={13} /> Quase comprou
         </button>
       </div>
 

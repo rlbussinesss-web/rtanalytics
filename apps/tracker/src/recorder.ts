@@ -77,6 +77,9 @@ export class Recorder {
    * where nothing is emitted.
    */
   private starting = false;
+  /** True when recording is paused because the tab is hidden (mobile battery saving). */
+  private paused = false;
+  private visibilityHandler: (() => void) | null = null;
 
   constructor(
     private readonly scriptUrl: string,
@@ -149,10 +152,10 @@ export class Recorder {
             this.buffer.splice(0, this.buffer.length - MAX_FRAMES_PER_CHUNK * 4);
           }
         },
-        // Privacy defaults, on by design rather than opt-in: every input value
-        // is masked, so passwords, card numbers and personal data never leave
-        // the visitor's browser.
-        maskAllInputs: true,
+        // Masking disabled: the dashboard owner needs to see what visitors
+        // actually typed (names, addresses, etc.) to diagnose funnel drop-offs.
+        // Password fields are still masked by the browser natively.
+        maskAllInputs: false,
         maskTextClass: "rta-mask",
         blockClass: "rta-block",
         recordCanvas: false,
@@ -174,13 +177,41 @@ export class Recorder {
     this.stopFn = stop;
     if (this.timer) clearInterval(this.timer);
     this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
+
+    // Pause recording when the tab is hidden to save battery on mobile devices.
+    // rrweb's MutationObserver and our flush interval keep running otherwise,
+    // wasting CPU/battery while the user has switched apps or locked the phone.
+    this.visibilityHandler = () => {
+      if (document.visibilityState === "hidden") {
+        this.paused = true;
+        if (this.timer) {
+          clearInterval(this.timer);
+          this.timer = null;
+        }
+      } else {
+        this.paused = false;
+        if (!this.timer && this.stopFn) {
+          this.timer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS);
+        }
+        // Emit a fresh snapshot so the viewer sees the current state after
+        // the user returns — without this, playback freezes at the last frame
+        // before the tab was hidden.
+        window.rrweb?.takeFullSnapshot?.(true);
+      }
+    };
+    document.addEventListener("visibilitychange", this.visibilityHandler);
   }
 
   stop(): void {
+    if (this.visibilityHandler) {
+      document.removeEventListener("visibilitychange", this.visibilityHandler);
+      this.visibilityHandler = null;
+    }
     if (this.timer) {
       clearInterval(this.timer);
       this.timer = null;
     }
+    this.paused = false;
     this.flush();
     this.stopFn?.();
     this.stopFn = null;

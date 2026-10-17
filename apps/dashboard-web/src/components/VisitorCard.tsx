@@ -7,6 +7,8 @@ import { avatarFor, deviceLabel, flag, sinceLabel } from "../lib/ui";
  * device/browser/OS chips, current page and time online, with a watch action
  * revealed on the card. Replaces the old flat list row.
  */
+export type SessionViewState = "active" | "hidden" | "idle" | "disconnected";
+
 export function VisitorCard({
   sessionId,
   info,
@@ -18,15 +20,26 @@ export function VisitorCard({
   info?: LiveEvent;
   firstSeen: number;
   onWatch: () => void;
-  state?: "active" | "hidden";
+  state?: SessionViewState;
 }) {
   const av = avatarFor(sessionId);
   const loc = [flag(info?.country), info?.city].filter(Boolean).join(" ") || "Localizando…";
   const DeviceIcon =
     info?.device === "mobile" ? Smartphone : info?.device === "tablet" ? Tablet : Monitor;
 
+  const stateLabel =
+    state === "active" ? "ao vivo" :
+    state === "hidden" ? "segundo plano" :
+    state === "idle" ? "inativo" :
+    "desconectado";
+  const stateClass =
+    state === "active" ? "" :
+    state === "hidden" ? " is-away" :
+    state === "idle" ? " is-idle" :
+    " is-disconnected";
+
   return (
-    <div className={`card visitor-card${state === "hidden" ? " is-away" : ""}`}>
+    <div className={`card visitor-card${stateClass}`}>
       <div className="vc-top">
         <span className="avatar" style={{ background: av.color }}>{av.initials}</span>
         <div style={{ minWidth: 0 }}>
@@ -34,9 +47,9 @@ export function VisitorCard({
           <div className="vc-loc">{loc}</div>
         </div>
         {state === "active" ? (
-          <span className="pill vc-live"><i className="dot" />ao vivo</span>
+          <span className="pill vc-live"><i className="dot" />{stateLabel}</span>
         ) : (
-          <span className="pill is-away vc-live">segundo plano</span>
+          <span className={`pill vc-live${stateClass}`}>{stateLabel}</span>
         )}
       </div>
 

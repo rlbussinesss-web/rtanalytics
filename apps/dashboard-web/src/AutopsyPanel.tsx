@@ -1,53 +1,36 @@
 import { useEffect, useState } from "react";
-import { CircleDollarSign, Image, MousePointerClick, Play, TextCursorInput, Type } from "lucide-react";
+import { AlertTriangle, Play, ShoppingCart, XCircle } from "lucide-react";
 import { API_BASE_URL, getToken } from "./token";
 import { RecordedPlayer } from "./ReplaysPanel";
 import type { RangeKey } from "./useMetrics";
 
 /**
- * Abandonment autopsy.
- *
- * Deliberately not a dashboard. It reads as a report: a ranked list of
- * objections, each one a sentence about a specific thing on the page that
- * people were looking at when they gave up — with the recordings that prove it,
- * so the reader can disagree in twenty seconds instead of taking it on faith.
+ * Simplified abandonment report: focuses on what matters for paid traffic —
+ * how many people reached checkout but didn't buy, and at which step they
+ * got stuck. No technical block-level detail; just the funnel drop-off.
  */
 
-interface Objection {
-  id: string;
+interface FunnelStep {
+  step: string;
   label: string;
-  kind: "campo" | "botão" | "texto" | "imagem" | "preço";
-  path: string;
   sessions: number;
-  share: number;
-  estimatedLostConversions: number;
-  estimatedLostRevenue: number | null;
-  y: number;
-  h: number;
+  droppedHere: number;
+  dropRate: number;
   sampleSessions: string[];
 }
 
-interface AutopsyReport {
+interface CheckoutReport {
   range: RangeKey;
-  examined: number;
-  skippedNoTrail: number;
+  totalSessions: number;
+  reachedCheckout: number;
+  converted: number;
+  abandoned: number;
+  abandonmentRate: number;
+  steps: FunnelStep[];
   enoughData: boolean;
-  objections: Objection[];
-  missingMaps: string[];
 }
 
 const RANGES: [RangeKey, string][] = [["24h", "24 horas"], ["7d", "7 dias"], ["30d", "30 dias"]];
-
-const KIND_ICON: Record<Objection["kind"], React.ReactNode> = {
-  campo: <TextCursorInput size={15} />,
-  botão: <MousePointerClick size={15} />,
-  preço: <CircleDollarSign size={15} />,
-  imagem: <Image size={15} />,
-  texto: <Type size={15} />,
-};
-
-const money = (v: number) =>
-  v.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
 export function AutopsyPanel({
   siteId,
@@ -58,10 +41,8 @@ export function AutopsyPanel({
   range: RangeKey;
   onRangeChange: (r: RangeKey) => void;
 }) {
-  const [data, setData] = useState<AutopsyReport | null>(null);
+  const [data, setData] = useState<CheckoutReport | null>(null);
   const [loading, setLoading] = useState(true);
-  // The evidence is always a past session, so it plays in the recorded player;
-  // the live viewer would sit waiting for frames that will never arrive.
   const [playing, setPlaying] = useState<string | null>(null);
 
   useEffect(() => {
@@ -72,16 +53,14 @@ export function AutopsyPanel({
         const res = await fetch(`${API_BASE_URL}/api/sites/${siteId}/autopsy?range=${range}`, {
           headers: { Authorization: `Bearer ${getToken() ?? ""}` },
         });
-        if (res.ok && !cancelled) setData((await res.json()) as AutopsyReport);
+        if (res.ok && !cancelled) setData((await res.json()) as CheckoutReport);
       } catch {
-        /* keep the previous report */
+        /* keep previous data */
       } finally {
         if (!cancelled) setLoading(false);
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [siteId, range]);
 
   return (
@@ -96,69 +75,90 @@ export function AutopsyPanel({
 
       {loading && !data && <div className="card ap-empty">analisando desistências…</div>}
 
-      {data && (
+      {data && !data.enoughData && (
+        <div className="card ap-empty">
+          <AlertTriangle size={20} />
+          <b>Ainda sem dados suficientes</b>
+          <p>
+            Assim que visitantes chegarem ao checkout, o relatório de abandono aparece aqui —
+            quantos chegaram, quantos compraram, e em qual passo travaram.
+          </p>
+        </div>
+      )}
+
+      {data && data.enoughData && (
         <>
-          <div className="ap-summary">
-            <b>{data.examined}</b> desistência(s) examinada(s)
-            {data.skippedNoTrail > 0 && (
-              <span className="ap-note">
-                {" "}· {data.skippedNoTrail} sem trilha de posição (ignoradas, não estimadas)
-              </span>
-            )}
+          {/* Summary cards */}
+          <div className="grid" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", marginBottom: 22 }}>
+            <div className="card stat-card">
+              <ShoppingCart size={16} style={{ color: "#8b5cf6", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700 }}>{data.reachedCheckout}</div>
+              <div style={{ opacity: 0.6, fontSize: 13 }}>Chegaram no checkout</div>
+            </div>
+            <div className="card stat-card">
+              <XCircle size={16} style={{ color: "#ef4444", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700 }}>{data.abandoned}</div>
+              <div style={{ opacity: 0.6, fontSize: 13 }}>Abandonaram</div>
+            </div>
+            <div className="card stat-card">
+              <AlertTriangle size={16} style={{ color: "#fbbf24", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700 }}>{(data.abandonmentRate * 100).toFixed(0)}%</div>
+              <div style={{ opacity: 0.6, fontSize: 13 }}>Taxa de abandono</div>
+            </div>
+            <div className="card stat-card">
+              <Play size={16} style={{ color: "#10b981", marginBottom: 8 }} />
+              <div style={{ fontSize: 28, fontWeight: 700 }}>{data.converted}</div>
+              <div style={{ opacity: 0.6, fontSize: 13 }}>Converteram</div>
+            </div>
           </div>
 
-          {data.missingMaps.length > 0 && (
-            <div className="card ap-warn">
-              Ainda sem mapa de conteúdo para: <code>{data.missingMaps.join(", ")}</code>. O mapa é
-              capturado na primeira visita após a publicação — sem ele, a posição não vira conteúdo.
-            </div>
-          )}
-
-          {!data.enoughData && (
-            <div className="card ap-empty">
-              <b>Ainda não há padrão para relatar</b>
-              <p>
-                Um grupo só vira objeção a partir de 3 pessoas parando no mesmo ponto — abaixo disso
-                é anedota, não padrão. Conforme o tráfego chegar, os grupos se formam aqui sozinhos.
-              </p>
-            </div>
-          )}
-
-          {data.objections.map((o) => (
-            <article key={o.id} className="card ap-card">
-              <div className="ap-kind">
-                {KIND_ICON[o.kind]} {o.kind}
-                <span className="ap-path">{o.path}</span>
-              </div>
-
-              <h3 className="ap-label">“{o.label}”</h3>
-
-              <p className="ap-verdict">
-                <b>{o.sessions}</b> pessoa(s) pararam aqui e não converteram —{" "}
-                {Math.round(o.share * 100)}% de todas as desistências.
-              </p>
-
-              <div className="ap-cost">
-                <span>
-                  ≈ <b>{o.estimatedLostConversions}</b> conversões perdidas
-                </span>
-                {o.estimatedLostRevenue != null && (
-                  <span className="ap-money">≈ {money(o.estimatedLostRevenue)}</span>
-                )}
-              </div>
-
-              {o.sampleSessions.length > 0 && (
-                <div className="ap-proof">
-                  <span>Confira você mesmo:</span>
-                  {o.sampleSessions.map((s) => (
-                    <button key={s} className="ap-watch" onClick={() => setPlaying(s)}>
-                      <Play size={12} fill="currentColor" stroke="none" /> {s.slice(0, 4)}
-                    </button>
-                  ))}
+          {/* Funnel steps — where they got stuck */}
+          <div className="card" style={{ padding: "20px 24px" }}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 600 }}>
+              Em qual passo travaram?
+            </h3>
+            {data.steps.length === 0 && (
+              <div style={{ opacity: 0.5 }}>Sem dados de passos do funil ainda.</div>
+            )}
+            {data.steps.map((step, i) => {
+              const maxDrop = Math.max(...data.steps.map((s) => s.droppedHere), 1);
+              return (
+                <div key={step.step} style={{ marginBottom: i < data.steps.length - 1 ? 14 : 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontWeight: 500, fontSize: 14 }}>{step.label}</span>
+                    <span style={{ fontSize: 13, opacity: 0.7 }}>
+                      {step.droppedHere} desistiram aqui ({(step.dropRate * 100).toFixed(0)}%)
+                    </span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 4, background: "var(--surface-2, #1e1e2e)", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${(step.droppedHere / maxDrop) * 100}%`,
+                        borderRadius: 4,
+                        background: step.dropRate > 0.4 ? "#ef4444" : step.dropRate > 0.2 ? "#fbbf24" : "#10b981",
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                  {step.sampleSessions.length > 0 && (
+                    <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {step.sampleSessions.slice(0, 3).map((s) => (
+                        <button
+                          key={s}
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: 11, padding: "2px 8px" }}
+                          onClick={() => setPlaying(s)}
+                        >
+                          <Play size={10} fill="currentColor" stroke="none" /> Ver sessão {s.slice(0, 6)}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </article>
-          ))}
+              );
+            })}
+          </div>
         </>
       )}
 

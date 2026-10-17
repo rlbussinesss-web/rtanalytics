@@ -28,7 +28,11 @@ export const WS_BASE_URL =
 export async function verifyToken(token: string): Promise<boolean> {
   const response = await fetch(`${API_BASE_URL}/api/login`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: "{}",
   });
   return response.ok;
 }
