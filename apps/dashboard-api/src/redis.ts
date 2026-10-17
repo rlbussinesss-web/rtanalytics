@@ -19,9 +19,12 @@ export function getRedis(): Redis {
 
 export async function getOnlineCount(siteId: string): Promise<number> {
   const redis = getRedis();
-  const key = `online:${siteId}`;
+  // Use the "active" sorted set — only sessions with a visible tab AND
+  // recent interaction (scroll/click/movement in last 30s). Background
+  // tabs and idle visitors don't count toward "Ao vivo".
+  const key = `active:${siteId}`;
   const now = Date.now();
-  await redis.zremrangebyscore(key, 0, now - PRESENCE_TTL_SEC * 1000);
+  await redis.zremrangebyscore(key, 0, now - 30 * 1000);
   return redis.zcard(key);
 }
 

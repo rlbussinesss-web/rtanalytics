@@ -156,16 +156,137 @@ function installIntentScore(emit: Emit): void {
 }
 
 // ------------------------------------------------------------- visibility
+/**
+ * Precise session state machine using document.visibilityState as the
+ * primary source of truth. Focus/blur are secondary signals only — blur
+ * does NOT mean background (DevTools, dialogs, extensions all steal focus
+ * without hiding the tab).
+ *
+ * States:
+ *   visible   — tab is foreground AND has focus (AO VIVO)
+ *   hidden    — tab is backgrounded via visibilityState (SEGUNDO PLANO)
+ *   idle      — tab is visible but no interaction for IDLE_THRESHOLD_MS
+ *   left      — page unloaded / navigated away (best-effort via pagehide)
+ *
+ * Every emission carries a monotonic sequence number so the dashboard can
+ * discard stale out-of-order events (e.g. a delayed "hidden" arriving after
+ * a newer "visible"). The sequence resets per page load which is fine —
+ * sessions are identified by sessionId, not by global ordering.
+ */
+const IDLE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes without interaction → idle
+const ACTIVE_PING_INTERVAL_MS = 10_000; // ping every 10s when active
+const ACTIVE_WINDOW_MS = 30_000; // consider "active" if interaction in last 30s
+
 function installVisibility(emit: Emit): void {
-  // Tells a live viewer when the visitor backgrounds the tab, returns, or
-  // leaves the page — so "is this person still here?" is answerable.
+  let seq = 0;
+  let lastInteraction = Date.now();
+  let currentState: "visible" | "hidden" | "idle" | "left" =
+    document.visibilityState === "hidden" ? "hidden" : "visible";
+  let idleTimer: ReturnType<typeof setTimeout> | null = null;
+  let activePingTimer: ReturnType<typeof setInterval> | null = null;
+
+  function send(state: "visible" | "hidden" | "idle" | "left"): void {
+    currentState = state;
+    seq += 1;
+    emit("visibility", {
+      state,
+      seq,
+      ts: Date.now(),
+      visibilityState: document.visibilityState,
+      hasFocus: document.hasFocus(),
+    });
+  }
+
+  function sendActivePing(): void {
+    // Only ping when tab is visible AND there was recent interaction
+    const now = Date.now();
+    const isActive = document.visibilityState === "visible" &&
+                     (now - lastInteraction) < ACTIVE_WINDOW_MS;
+    if (isActive) {
+      emit("active-ping", { ts: now });
+    }
+  }
+
+  function startActivePinging(): void {
+    if (activePingTimer) return;
+    activePingTimer = setInterval(sendActivePing, ACTIVE_PING_INTERVAL_MS);
+    sendActivePing(); // immediate first ping
+  }
+
+  function stopActivePinging(): void {
+    if (activePingTimer) {
+      clearInterval(activePingTimer);
+      activePingTimer = null;
+    }
+  }
+
+  function resetIdleTimer(): void {
+    lastInteraction = Date.now();
+    if (idleTimer) clearTimeout(idleTimer);
+    if (currentState === "idle" && document.visibilityState === "visible") {
+      send("visible");
+    }
+    if (document.visibilityState === "visible") {
+      startActivePinging();
+      idleTimer = setTimeout(() => {
+        if (document.visibilityState === "visible" && currentState === "visible") {
+          send("idle");
+          stopActivePinging();
+        }
+      }, IDLE_THRESHOLD_MS);
+    } else {
+      stopActivePinging();
+    }
+  }
+
+  // Primary: visibilitychange is the authoritative signal for tab background.
   document.addEventListener("visibilitychange", () => {
-    emit("visibility", { state: document.visibilityState === "hidden" ? "hidden" : "visible" });
+    if (document.visibilityState === "hidden") {
+      if (idleTimer) clearTimeout(idleTimer);
+      send("hidden");
+    } else {
+      // Tab became visible again — reset idle timer and emit visible.
+      resetIdleTimer();
+      send("visible");
+    }
   });
+
+  // Secondary: focus/blur only matter when the tab IS visible. A blur while
+  // visible does NOT mean background — it means DevTools, dialog, or another
+  // window stole focus. We track it for observability but don't change state.
+  window.addEventListener("focus", () => {
+    if (document.visibilityState === "visible") resetIdleTimer();
+  });
+  window.addEventListener("blur", () => {
+    // Intentionally does NOT change state. Blur ≠ background.
+    // The hasFocus field in the next visibility event will reflect this.
+  });
+
+  // Interaction resets idle timer: clicks, keys, scrolls, touches.
+  const interactionEvents = ["click", "keydown", "scroll", "touchstart", "mousemove"] as const;
+  for (const evt of interactionEvents) {
+    window.addEventListener(evt, resetIdleTimer, { passive: true });
+  }
+
   // pagehide fires on navigation away / tab close; best-effort final signal.
   window.addEventListener("pagehide", () => {
-    emit("visibility", { state: "left" });
+    if (idleTimer) clearTimeout(idleTimer);
+    send("left");
   });
+
+  // pageshow fires on bfcache restore — re-emit current state so the server
+  // doesn't keep showing "left" after a back-navigation.
+  window.addEventListener("pageshow", () => {
+    resetIdleTimer();
+    send(document.visibilityState === "hidden" ? "hidden" : "visible");
+  });
+
+  // Initial state snapshot: the server needs to know the state at connect
+  // time, not just wait for the first change. Also serves as the reconnect
+  // snapshot — Transport calls flush() on open which triggers heartbeats,
+  // and this ensures visibility state accompanies it.
+  resetIdleTimer();
+  send(currentState);
 }
 
 // --------------------------------------------------------------- clicks

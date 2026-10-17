@@ -225,6 +225,20 @@ export const pageMapSchema = z.object({
   }),
 });
 
+/**
+ * Ephemeral signal that a visitor's tab is visible AND they interacted
+ * recently (scroll/click/movement in last 30s). Only these count toward
+ * the "Ao vivo" badge — background tabs and idle visitors don't.
+ * Not persisted to the event log; only touches the active-presence sorted set.
+ */
+export const activePingSchema = z.object({
+  ...baseFields,
+  eventType: z.literal("active-ping"),
+  payload: z.object({
+    ts: z.number().int().nonnegative(),
+  }),
+});
+
 /** Discriminated union covering every event type the ingest server accepts. */
 export const trackerEventSchema = z.discriminatedUnion("eventType", [
   pageviewSchema,
@@ -240,6 +254,7 @@ export const trackerEventSchema = z.discriminatedUnion("eventType", [
   visibilitySchema,
   viewportSchema,
   pageMapSchema,
+  activePingSchema,
 ]);
 
 export type IntentScoreEvent = z.infer<typeof intentScoreSchema>;

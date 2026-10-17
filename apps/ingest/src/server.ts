@@ -6,6 +6,7 @@ import { parseTrackerEvent } from "@rtanalytics/protocol";
 import { publishEvent, recordReplayChunk } from "./stream.js";
 import {
   touchPresence,
+  touchActivePresence,
   publishLiveEvent,
   publishReplayChunk,
   readAllowedSites,
@@ -405,6 +406,16 @@ async function handleMessage(
         ),
       ]);
     }
+  }
+
+  // Active presence: tab visible AND recent interaction. Only these count
+  // toward the "Ao vivo" badge — background tabs and idle visitors don't.
+  if (event.eventType === "active-ping") {
+    await touchActivePresence(event.siteId, event.sessionId).catch((err) =>
+      app.log.warn({ err }, "active presence update failed")
+    );
+    // Don't persist or fan-out active-pings — they're ephemeral signals.
+    return;
   }
 
   // Replay frames take a different path: they are high-volume, only useful to

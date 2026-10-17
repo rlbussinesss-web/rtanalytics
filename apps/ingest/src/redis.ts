@@ -10,6 +10,7 @@ export function getRedis(): Redis {
 }
 
 const PRESENCE_TTL_SEC = 60; // must be renewed by heartbeats (every 15s from tracker)
+const ACTIVE_PRESENCE_TTL_SEC = 30; // active presence expires faster — only counts truly engaged visitors
 
 /**
  * Marks a session as "online" for a site using a sorted set keyed by
@@ -27,11 +28,37 @@ export async function touchPresence(siteId: string, sessionId: string): Promise<
   await redis.zremrangebyscore(key, 0, now - PRESENCE_TTL_SEC * 1000);
 }
 
+/**
+ * Marks a session as "actively engaged" — tab visible AND recent interaction.
+ * Uses a separate sorted set with a shorter TTL so the "Ao vivo" counter
+ * only reflects visitors who are actually moving around the site right now,
+ * not tabs left open in the background.
+ */
+export async function touchActivePresence(siteId: string, sessionId: string): Promise<void> {
+  const redis = getRedis();
+  const key = `active:${siteId}`;
+  const now = Date.now();
+  await redis.zadd(key, now, sessionId);
+  await redis.zremrangebyscore(key, 0, now - ACTIVE_PRESENCE_TTL_SEC * 1000);
+}
+
 export async function getOnlineCount(siteId: string): Promise<number> {
   const redis = getRedis();
   const key = `online:${siteId}`;
   const now = Date.now();
   await redis.zremrangebyscore(key, 0, now - PRESENCE_TTL_SEC * 1000);
+  return redis.zcard(key);
+}
+
+/**
+ * Returns the count of actively engaged visitors — tab visible with recent
+ * interaction. This is what the "Ao vivo" badge should display.
+ */
+export async function getActiveCount(siteId: string): Promise<number> {
+  const redis = getRedis();
+  const key = `active:${siteId}`;
+  const now = Date.now();
+  await redis.zremrangebyscore(key, 0, now - ACTIVE_PRESENCE_TTL_SEC * 1000);
   return redis.zcard(key);
 }
 
