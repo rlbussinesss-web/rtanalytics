@@ -48,6 +48,20 @@ export function LiveScreen({
   const [status, setStatus] = useState("conectando…");
   const [live, setLive] = useState(false);
   const [frameCount, setFrameCount] = useState(0);
+  const [unavailable, setUnavailable] = useState(false);
+
+  // If no frames arrive within 5 seconds, the session is likely stale (visitor
+  // left or closed the tab). Show a clear message instead of "waiting forever".
+  useEffect(() => {
+    if (live || unavailable) return;
+    const timer = setTimeout(() => {
+      if (!live && frameCount === 0) {
+        setUnavailable(true);
+        setStatus("sessão indisponível");
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [live, unavailable, frameCount]);
 
   /**
    * Fit the replay to the panel *width* and let it scroll vertically. Scaling
@@ -243,7 +257,16 @@ export function LiveScreen({
         </header>
         <div className="stage" ref={stageRef}>
           <div ref={hostRef} />
-          {overlayVisible && (
+          {unavailable && (
+            <div className="presence-overlay">
+              <div className="presence-card warn">
+                <span className="presence-ico"><WifiOff size={14} /></span>
+                <b>Sessão indisponível</b>
+                <span>O visitante já saiu ou fechou a aba. Nenhuma gravação foi capturada porque não havia conexão ativa no momento em que você abriu esta tela.</span>
+              </div>
+            </div>
+          )}
+          {overlayVisible && !unavailable && (
             <PresenceOverlay kind={presence.kind} onDismiss={() => setDismissedKind(presence.kind)} />
           )}
         </div>
