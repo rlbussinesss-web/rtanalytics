@@ -138,7 +138,25 @@ app.get("/healthz", async () => ({
  * duplicate (it's the same event, just delivered twice). The online counter
  * uses a sorted set keyed by sessionId, so a double-touch is idempotent.
  */
+// CORS preflight for the beacon endpoint — browsers send an OPTIONS request
+// before the actual POST when Content-Type is set, and without this handler
+// the preflight fails and sendBeacon() never fires.
+app.options("/beacon", async (_req, reply) => {
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+  reply.header("Access-Control-Allow-Headers", "Content-Type");
+  return reply.code(204).send();
+});
+
 app.post("/beacon", async (req, reply) => {
+  // CORS headers for the beacon endpoint — the tracker fires this from the
+  // visitor's browser before the WebSocket connects, so it needs cross-origin
+  // access. Without these headers, sendBeacon() fails silently and the
+  // "instant detection" fast-path never works.
+  reply.header("Access-Control-Allow-Origin", "*");
+  reply.header("Access-Control-Allow-Methods", "POST, OPTIONS");
+  reply.header("Access-Control-Allow-Headers", "Content-Type");
+
   const b = (req.body ?? {}) as {
     siteId?: string;
     sessionId?: string;

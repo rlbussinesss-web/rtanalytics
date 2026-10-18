@@ -99,6 +99,26 @@ app.get("/api/sites/:siteId/sessions", async (req) => {
   return { siteId, sessions: await getOnlineSessions(siteId) };
 });
 
+/**
+ * Check if a session has an active WebSocket connection on the ingest server.
+ * The dashboard uses this to avoid showing "watch" buttons for stale sessions
+ * that are still in Redis but have no live tracker connection.
+ */
+app.get("/api/sites/:siteId/sessions/:sessionId/alive", async (req, reply) => {
+  const { siteId, sessionId } = req.params as { siteId: string; sessionId: string };
+  try {
+    const response = await fetch("https://rta-ingest.duckdns.org/debug/sessions");
+    if (!response.ok) {
+      return reply.code(502).send({ error: "ingest unreachable" });
+    }
+    const data = (await response.json()) as { sessions: string[] };
+    const alive = data.sessions.includes(sessionId);
+    return { siteId, sessionId, alive };
+  } catch (err) {
+    return reply.code(502).send({ error: "failed to check session status" });
+  }
+});
+
 app.get("/api/sites/:siteId/metrics", async (req) => {
   const { siteId } = req.params as { siteId: string };
   const q = req.query as { range?: string };
